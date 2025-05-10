@@ -6,6 +6,8 @@ import "core:time"
 import "core:math/rand"
 import sdl "vendor:sdl3"
 
+import "vkx"
+
 // Simple vector types
 Vec2 :: [2]f32
 Vec3 :: [3]f32
@@ -259,6 +261,297 @@ create_monsters :: proc() {
 }
 
 
+init_vulkan :: proc() {
+	// ----- Initialise the vulkan instance and devices -----
+	vkx.init_instance(window)
+
+	/*
+	// ----- Create the swap chain -----
+	vkx_create_swap_chain(false);
+	
+	// ----- Create the graphics pipeline -----
+	// Vertex input bindng and attributes
+	VkVertexInputBindingDescription binding_description = get_binding_description();
+	size_t attribute_descriptions_count = 0;
+	VkVertexInputAttributeDescription* attribute_descriptions = get_attribute_descriptions(&attribute_descriptions_count);
+
+	// Push constants for pushing matrices etc.
+	VkPushConstantRange push_constant_range = {0};
+	push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	push_constant_range.offset = 0;
+	push_constant_range.size = sizeof(PushConstants);
+
+	tile_pipeline = vkx_create_vertex_buffer_pipeline(
+		"shaders/tiles.vert.spv",
+		"shaders/tiles.frag.spv",
+		binding_description,
+		attribute_descriptions,
+		attribute_descriptions_count,
+		push_constant_range,
+		num_textures
+	);
+	
+	// Create the sprite pipeline
+	// Vertex input binding and attributes
+	VkVertexInputBindingDescription sprite_binding_description = get_sprite_binding_description();
+	size_t sprite_attribute_descriptions_count = 0;
+	VkVertexInputAttributeDescription* sprite_attribute_descriptions = get_sprite_attribute_descriptions(&sprite_attribute_descriptions_count);
+
+	// Push constants are the same (actually not used by the sprite shaders)
+	sprite_pipeline = vkx_create_vertex_buffer_pipeline(
+		"shaders/sprite.vert.spv",
+		"shaders/sprite.frag.spv",
+		sprite_binding_description,
+		sprite_attribute_descriptions,
+		sprite_attribute_descriptions_count,
+		push_constant_range,
+		num_textures
+	);
+
+	// Screen pipeline is simple and has no vertex input
+	screen_pipeline = vkx_create_screen_pipeline(
+		"shaders/screen.vert.spv",
+		"shaders/screen.frag.spv"
+	);
+
+	free(sprite_attribute_descriptions);
+	free(attribute_descriptions);
+
+	
+	// ----- Create the buffers -----
+	// Vertex buffer
+	vertex_buffer = vkx_create_and_populate_buffer(
+			vertices, sizeof(vertices[0]) * vertices_count,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+	);
+	// Index buffer
+	index_buffer = vkx_create_and_populate_buffer(
+			vertex_indices, sizeof(vertex_indices[0]) * vertex_indices_count,
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+	);
+	// Sprite vertex buffer
+	sprite_vertex_buffer = vkx_create_and_populate_buffer(
+			vertex_sprites, sizeof(vertex_sprites[0]) * vertex_sprites_count,
+			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+	);
+
+	// ----- Load the texture images -----
+	textures = malloc(sizeof(VkxImage) * num_textures);
+	textures[0] = vkx_create_texture_image("textures/tiles.png");
+	textures[1] = vkx_create_texture_image("textures/monsters1.png");
+	textures[2] = vkx_create_texture_image("textures/monsters2.png");
+	textures[3] = vkx_create_texture_image("textures/monsters3.png");
+	textures[4] = vkx_create_texture_image("textures/monsters4.png");
+	
+	// Create the texture sampler
+	create_texture_sampler();
+
+	// ----- Create the uniform buffer -----
+	VkDeviceSize uniform_buffer_size = sizeof(UniformBufferObject);
+
+	if (uniform_buffer_size > 65536) {
+		fprintf(stderr, "Tried to allocate a buffer with %zu bytes, which is greater than the maximum (65536)", uniform_buffer_size);
+		exit(1);
+	}
+
+	for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {
+		uniform_buffers[i] = vkx_create_buffer(
+			uniform_buffer_size,
+			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+		);
+
+		// Map the buffer memory and copy the vertex data into it
+		vkMapMemory(vkx_instance.device, uniform_buffers[i].memory, 0, uniform_buffer_size, 0, &uniform_buffers_mapped[i]);
+	}
+
+	// ----- Create the offscreen images -----
+	VkFormat depth_format = vkx_find_depth_format();
+
+	for (size_t i=0; i<VKX_FRAMES_IN_FLIGHT; i++) {
+		offscreen_images[i] = vkx_create_image(
+			SCREEN_WIDTH,
+			SCREEN_HEIGHT,
+			vkx_swap_chain.image_format,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+		);
+
+		offscreen_images[i].view = vkx_create_image_view(
+			offscreen_images[i].image,
+			vkx_swap_chain.image_format,
+			VK_IMAGE_ASPECT_COLOR_BIT
+		);
+
+		// transition the image layout to color attachment optimal
+		vkx_transition_image_layout_tmp_buffer(
+			offscreen_images[i].image,
+			vkx_swap_chain.image_format,
+			VK_IMAGE_LAYOUT_UNDEFINED,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		);
+
+		// And depth images too
+		depth_images[i] = vkx_create_image(
+			SCREEN_WIDTH,
+			SCREEN_HEIGHT,
+			depth_format,
+			VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+		);
+
+		depth_images[i].view = vkx_create_image_view(depth_images[i].image, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+		// Transition the image layout to depth stencil attachment
+		vkx_transition_image_layout_tmp_buffer(
+			depth_images[i].image, depth_format,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+		);
+	}
+
+	// ----- Create the descriptor pool -----
+	VkDescriptorPoolSize desc_pool_sizes[2] = {0};
+	desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	desc_pool_sizes[0].descriptorCount = VKX_FRAMES_IN_FLIGHT * 2;
+	desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	desc_pool_sizes[1].descriptorCount = VKX_FRAMES_IN_FLIGHT * num_textures + VKX_FRAMES_IN_FLIGHT;
+
+	VkDescriptorPoolCreateInfo desc_pool_info = {0};
+	desc_pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	desc_pool_info.poolSizeCount = 2;
+	desc_pool_info.pPoolSizes = desc_pool_sizes;
+	desc_pool_info.maxSets = VKX_FRAMES_IN_FLIGHT * 2;
+
+	if (vkCreateDescriptorPool(vkx_instance.device, &desc_pool_info, NULL, &descriptor_pool) != VK_SUCCESS) {
+		fprintf(stderr, "failed to create descriptor pool!\n");
+		exit(1);
+	}
+	
+	{
+		// ----- Create the descriptor sets -----
+		VkDescriptorSetLayout ds_layouts[VKX_FRAMES_IN_FLIGHT] = {0};
+		for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {
+			ds_layouts[i] = tile_pipeline.descriptor_set_layout;
+		}
+
+		VkDescriptorSetAllocateInfo ds_alloc_info = {0};
+		ds_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		ds_alloc_info.descriptorPool = descriptor_pool;
+		ds_alloc_info.descriptorSetCount = VKX_FRAMES_IN_FLIGHT;
+		ds_alloc_info.pSetLayouts = ds_layouts;
+		
+		// Create the base descriptor sets
+		if (vkAllocateDescriptorSets(vkx_instance.device, &ds_alloc_info, descriptor_sets) != VK_SUCCESS) {
+			fprintf(stderr, "failed to allocate descriptor sets!\n");
+			exit(1);
+		}
+
+		for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {
+			VkDescriptorBufferInfo buffer_info = {0};
+			buffer_info.buffer = uniform_buffers[i].buffer;
+			buffer_info.offset = 0;
+			buffer_info.range = sizeof(UniformBufferObject);
+
+			VkDescriptorImageInfo* image_infos = malloc(sizeof(VkDescriptorImageInfo) * num_textures);
+
+			for (size_t j = 0; j < num_textures; j++) {
+				image_infos[j].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				image_infos[j].imageView = textures[j].view;
+				image_infos[j].sampler = texture_sampler;
+			}
+
+			VkWriteDescriptorSet descriptor_writes[2] = {0};
+			descriptor_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptor_writes[0].dstSet = descriptor_sets[i];
+			descriptor_writes[0].dstBinding = 0;
+			descriptor_writes[0].dstArrayElement = 0;
+			descriptor_writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptor_writes[0].descriptorCount = 1;
+			descriptor_writes[0].pBufferInfo = &buffer_info;
+			descriptor_writes[0].pImageInfo = NULL;
+			descriptor_writes[0].pTexelBufferView = NULL;
+
+			descriptor_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptor_writes[1].dstSet = descriptor_sets[i];
+			descriptor_writes[1].dstBinding = 1;
+			descriptor_writes[1].dstArrayElement = 0;
+			descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptor_writes[1].descriptorCount = num_textures;
+			descriptor_writes[1].pBufferInfo = NULL;
+			descriptor_writes[1].pImageInfo = image_infos;
+			descriptor_writes[1].pTexelBufferView = NULL;
+
+			vkUpdateDescriptorSets(vkx_instance.device, 2, descriptor_writes, 0, NULL);
+
+			free(image_infos);
+		}
+	}
+	{
+		// ----- Create the screen descriptor sets -----
+		VkDescriptorSetLayout ds_layouts[VKX_FRAMES_IN_FLIGHT] = {0};
+		for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {
+			ds_layouts[i] = screen_pipeline.descriptor_set_layout;
+		}
+
+		VkDescriptorSetAllocateInfo ds_alloc_info = {0};
+		ds_alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		ds_alloc_info.descriptorPool = descriptor_pool;
+		ds_alloc_info.descriptorSetCount = VKX_FRAMES_IN_FLIGHT;
+		ds_alloc_info.pSetLayouts = ds_layouts;
+		
+		// Create the base descriptor sets
+		if (vkAllocateDescriptorSets(vkx_instance.device, &ds_alloc_info, screen_descriptor_sets) != VK_SUCCESS) {
+			fprintf(stderr, "failed to allocate screen descriptor sets!\n");
+			exit(1);
+		}
+
+		for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {
+			VkDescriptorBufferInfo buffer_info = {0};
+			buffer_info.buffer = uniform_buffers[i].buffer;
+			buffer_info.offset = 0;
+			buffer_info.range = sizeof(UniformBufferObject);
+
+			VkDescriptorImageInfo image_info = {0};
+
+			image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			image_info.imageView = offscreen_images[i].view;
+			image_info.sampler = texture_sampler;
+
+			VkWriteDescriptorSet descriptor_writes[2] = {0};
+			descriptor_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptor_writes[0].dstSet = screen_descriptor_sets[i];
+			descriptor_writes[0].dstBinding = 0;
+			descriptor_writes[0].dstArrayElement = 0;
+			descriptor_writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptor_writes[0].descriptorCount = 1;
+			descriptor_writes[0].pBufferInfo = &buffer_info;
+			descriptor_writes[0].pImageInfo = NULL;
+			descriptor_writes[0].pTexelBufferView = NULL;
+
+			descriptor_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptor_writes[1].dstSet = screen_descriptor_sets[i];
+			descriptor_writes[1].dstBinding = 1;
+			descriptor_writes[1].dstArrayElement = 0;
+			descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptor_writes[1].descriptorCount = 1;
+			descriptor_writes[1].pBufferInfo = NULL;
+			descriptor_writes[1].pImageInfo = &image_info;
+			descriptor_writes[1].pTexelBufferView = NULL;
+
+			vkUpdateDescriptorSets(vkx_instance.device, 2, descriptor_writes, 0, NULL);
+		}
+	}
+
+	// ----- Create the semaphores and fences -----
+	vkx_init_sync_objects();
+
+	printf("Initiialisation complete\n");
+	*/
+}
+
+
 main :: proc() {
 	fmt.println("Hello, Vulkan!\n")
 
@@ -288,10 +581,10 @@ main :: proc() {
 	// Create the monsters
 	create_monsters()
 
-	/*
 	// Initialise Vulkan
 	init_vulkan();
 	
+	/*
 	// Make the window visible
 	SDL_ShowWindow(window);
 

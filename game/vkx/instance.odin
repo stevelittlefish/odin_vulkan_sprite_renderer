@@ -53,7 +53,7 @@ get_required_extensions :: proc(count: ^u32) -> []cstring {
 	 * Note: calling this repeatedly could cause a memory leak as we create a new array each time
 	 * if validation layers are enabled.
 	 */
-	// assert(count != nil)
+	assert(count != nil)
 	
 	// Get the required extensions from SDL and set count to the number of extensions
 	sdl_extensions := sdl.Vulkan_GetInstanceExtensions(count);
@@ -102,6 +102,101 @@ debug_callback :: proc "system" (
 	return false
 }
 
+
+pick_physical_device :: proc() -> vk.PhysicalDevice {
+	device_count: u32
+	vk.EnumeratePhysicalDevices(instance.instance, &device_count, nil)
+
+	if (device_count == 0) {
+		fmt.fprintfln(os.stderr, "failed to find GPUs with Vulkan support!")
+		os.exit(1)
+	}
+	
+	devices := make([]vk.PhysicalDevice, device_count, context.temp_allocator)
+	if vk.EnumeratePhysicalDevices(instance.instance, &device_count, raw_data(devices)) != .SUCCESS {
+		fmt.fprintfln(os.stderr, "failed enumerate GPUs!")
+		os.exit(1)
+	}
+
+	// First let's print some info about all of the found devices
+	fmt.printfln(" Found %d physical devices:", device_count)
+	for i := 0; i < int(device_count); i += 1 {
+		device_properties: vk.PhysicalDeviceProperties
+		vk.GetPhysicalDeviceProperties(devices[i], &device_properties)
+		fmt.printfln("  Device %d: %s", i, device_properties.deviceName)
+	}
+	
+	physical_device: vk.PhysicalDevice
+
+	for i := 0; i < int(device_count); i += 1 {
+		fmt.printfln(" Physical Device %d", i)
+
+		indices := find_queue_families(devices[i], instance.surface)
+
+		fmt.printfln("  Graphics Family: %d", indices.graphics_family)
+		fmt.printfln("  Present Family: %d", indices.present_family)
+		
+        extension_count: u32
+        vk.EnumerateDeviceExtensionProperties(devices[i], nil, &extension_count, nil)
+		available_extensions := make([]vk.ExtensionProperties, extension_count, context.temp_allocator)
+
+        vk.EnumerateDeviceExtensionProperties(devices[i], nil, &extension_count, raw_data(available_extensions))
+		
+		// Check all of the required extensions are supported
+		required_extensions_supported := true
+		
+		device_extensions := DEVICE_EXTENSIONS
+		for j := 0; j < len(device_extensions); j += 1 {
+			extension_found := false
+			for k := 0; k < int(extension_count); k += 1 {
+				if device_extensions[j] == cstring(&available_extensions[k].extensionName[0]) {
+					extension_found = true
+					break
+				}
+			}
+
+			if (!extension_found) {
+				required_extensions_supported = false
+				fmt.printfln("Extension %s not supported", device_extensions[j])
+				break
+			}
+		}
+
+		if (!required_extensions_supported) {
+			continue
+		}
+
+		// Check the features we need are supported
+		features: vk.PhysicalDeviceFeatures
+		vk.GetPhysicalDeviceFeatures(devices[i], &features)
+
+		if (!features.samplerAnisotropy) {
+			fmt.println("Sampler anisotropy not supported")
+			continue
+		}
+		
+		// Check the device supports the required swap chain features
+		swap_chain_adequate := false
+		
+		if (indices.has_present_family) {
+			swap_chain_support := query_swap_chain_support(devices[i], instance.surface)
+			swap_chain_adequate = len(swap_chain_support.formats) > 0 && len(swap_chain_support.present_modes) > 0
+			cleanup_swap_chain_support(&swap_chain_support);
+		}
+		
+        if indices.has_graphics_family && indices.has_present_family && swap_chain_adequate {
+			device_properties: vk.PhysicalDeviceProperties
+			vk.GetPhysicalDeviceProperties(devices[i], &device_properties)
+			fmt.printfln(" Device %d (%s) is suitable", i, device_properties.deviceName)
+
+			physical_device = devices[i]
+			break
+		}
+	}
+
+	return physical_device
+}
+
 init_instance :: proc(window: ^sdl.Window) {
 	fmt.println("Initialising Vulkan (VKX)");
 	
@@ -125,7 +220,7 @@ init_instance :: proc(window: ^sdl.Window) {
 		fmt.println(" Validation layers enabled")
 
 		if !check_validation_layer_support() {
-			fmt.fprintfln(os.stderr, "validation layers requested, but not available!\n")
+			fmt.fprintfln(os.stderr, "validation layers requested, but not available!")
 			os.exit(1)
 		}
 	}
@@ -141,6 +236,7 @@ init_instance :: proc(window: ^sdl.Window) {
 	
 	num_enabled_extensions: u32
 	enabled_extensions := get_required_extensions(&num_enabled_extensions)
+	defer delete(enabled_extensions)
 
 	fmt.println(" Requesting instance extensions:")
 	for i := 0; i < int(num_enabled_extensions); i += 1 {
@@ -184,10 +280,11 @@ init_instance :: proc(window: ^sdl.Window) {
 		fmt.fprintln(os.stderr, "failed to create instance! Result:", result);
 		os.exit(1);
 	}
+	
+	// Load procedure addresses
+	vk.load_proc_addresses_instance(instance.instance)
 
 	/*
-	free((void *)instance_create_info.ppEnabledExtensionNames);
-
 	// ----- Create the debug messenger -----
 	if (enable_validation_layers) {
 		VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info;
@@ -200,23 +297,25 @@ init_instance :: proc(window: ^sdl.Window) {
 			exit(VK_ERROR_EXTENSION_NOT_PRESENT);
 		}
 	}
+	*/
 
 	// ----- Create the window surface -----
-	if (!SDL_Vulkan_CreateSurface(window, vkx_instance.instance, NULL, &vkx_instance.surface)) {
-		fprintf(stderr, "failed to create window surface!");
-		exit(1);
+	if !sdl.Vulkan_CreateSurface(window, instance.instance, nil, &instance.surface) {
+		fmt.fprintfln(os.stderr, "failed to create window surface!")
+		os.exit(1)
 	}
-	
+
 	// ----- Pick a physical device -----
 	
 	// Next find a phyiscal device (i.e. a GPU) that supports the required features
-	vkx_instance.physical_device = vkx_pick_physical_device();
+	instance.physical_device = pick_physical_device()
 
-	if (vkx_instance.physical_device == VK_NULL_HANDLE) {
-		fprintf(stderr, "failed to find a suitable GPU!\n");
-		exit(1);
+	if (instance.physical_device == nil) {
+		fmt.fprintfln(os.stderr, "failed to find a suitable GPU!")
+		os.exit(1)
 	}
 
+	/*
 	// ----- Create the logical device -----
 
 	// Next we need to create a logical device to interface with the physical device

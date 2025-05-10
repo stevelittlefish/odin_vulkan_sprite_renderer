@@ -1,6 +1,7 @@
 // Manages main VKX (Vulkan) instance
 package vkx
 
+import "base:runtime"
 import "core:fmt"
 import "core:strings"
 import "core:os"
@@ -28,7 +29,7 @@ check_validation_layer_support :: proc() -> bool {
 		for j := 0; j < int(layer_count); j += 1 {
 			//if (strings.compare(validation_layers[i], available_layers[j].layerName) == 0) {
 			if validation_layers[i] == cstring(&available_layers[j].layerName[0]) {
-				fmt.printfln("Found validation layer: %s", validation_layers[i])
+				fmt.printfln("  Validation layer %s is available", validation_layers[i])
 				layer_found = true
 				break
 			}
@@ -38,6 +39,8 @@ check_validation_layer_support :: proc() -> bool {
 			return false;
 		}
 	}
+	
+	fmt.println(" All validation layers are supported")
 
 	return true;
 }
@@ -60,25 +63,43 @@ get_required_extensions :: proc(count: ^u32) -> []cstring {
 		os.exit(1)
 	}
 	
-	// TODO
-	// if (!enable_validation_layers) {
-		// Copy the SDL sdl_extensions
+	if (!ENABLE_VALIDATION_LAYERS) {
+		// Just copy the SDL sdl_extensions
 		out := make([]cstring, count^)
 		for i := 0; i < int(count^); i += 1 {
 			out[i] = sdl_extensions[i]
 		}
 		return out
-	// }
+	}
 
 	// If validation layers are enabled, add the debug utils extension
-	/*
-	const char** extensions = malloc(sizeof(const char*) * (*count + 1));
-	memcpy(extensions, sdl_extensions, sizeof(const char*) * *count);
-	extensions[*count] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
-	*count += 1;
+	out := make([]cstring, count^ + NUM_VALIDATION_LAYERS)
+	validation_layers := VALIDATION_LAYERS
+
+	// Copy the SDL extension layers
+	for i := 0; i < int(count^); i += 1 {
+		out[i] = sdl_extensions[i]
+	}
+	for j := 0; j < NUM_VALIDATION_LAYERS; j += 1 {
+		out[int(count^) + j] = validation_layers[j]
+	}
 	
-	return (char const * const *) extensions;
-	*/
+	count^ += NUM_VALIDATION_LAYERS
+	
+	return out
+}
+
+debug_callback :: proc "system" (
+		message_severity: vk.DebugUtilsMessageSeverityFlagsEXT,
+		message_type: vk.DebugUtilsMessageTypeFlagsEXT,
+		callback_data: ^vk.DebugUtilsMessengerCallbackDataEXT,
+		user_data: rawptr,
+) -> b32 {
+	context = runtime.default_context()
+	fmt.fprintf(os.stderr, "Validation Layer (%d, %d): ", message_severity, message_type)
+	fmt.fprintf(os.stderr, "%s\n", callback_data.pMessage)
+
+	return false
 }
 
 init_instance :: proc(window: ^sdl.Window) {
@@ -87,7 +108,19 @@ init_instance :: proc(window: ^sdl.Window) {
 	// Keep a reference to the window to avoid passing it around later
 	instance.window = window
 	
-	/*
+
+	// Load Vulkan
+	proc_addr := sdl.Vulkan_GetVkGetInstanceProcAddr()
+	if proc_addr == nil {
+		fmt.fprintfln(os.stderr, "Vulkan proc address is null!")
+		os.exit(1)
+	}
+
+	vk.load_proc_addresses_global(cast(rawptr)proc_addr)
+	
+	// Should be loaded now
+	assert(vk.CreateInstance != nil)
+
 	when ENABLE_VALIDATION_LAYERS {
 		fmt.println(" Validation layers enabled")
 
@@ -96,14 +129,6 @@ init_instance :: proc(window: ^sdl.Window) {
 			os.exit(1)
 		}
 	}
-	*/
-	
-	/*
-	if (enable_validation_layers && !vkx_check_validation_layer_support()) {
-		fprintf(stderr, "validation layers requested, but not available!");
-		exit(1);
-	}
-	*/
 	
 	app_info := vk.ApplicationInfo{
 		sType = vk.StructureType.APPLICATION_INFO,
@@ -129,29 +154,34 @@ init_instance :: proc(window: ^sdl.Window) {
 		enabledExtensionCount = num_enabled_extensions,
 	}
 	
-	debug_create_info := vk.DebugUtilsMessengerCreateInfoEXT {}
-	
-	/*
-	if (enable_validation_layers) {
-		printf(" Enabling validation layers:\n");
-		for (uint32_t i = 0; i < VKX_NUM_VALIDATION_LAYERS; i++) {
-			printf("  Layer: %s\n", validation_layers[i]);
+	if ENABLE_VALIDATION_LAYERS {
+		validation_layers := VALIDATION_LAYERS
+
+		fmt.println(" Enabling validation layers:")
+		for i: u32 = 0; i < NUM_VALIDATION_LAYERS; i += 1 {
+			fmt.printfln("  Layer: %s", validation_layers[i])
 		}
 
-		instance_create_info.enabledLayerCount = VKX_NUM_VALIDATION_LAYERS;
-		instance_create_info.ppEnabledLayerNames = validation_layers;
+		instance_create_info.enabledLayerCount = NUM_VALIDATION_LAYERS
+		instance_create_info.ppEnabledLayerNames = &validation_layers[0]
+		
+		debug_create_info := vk.DebugUtilsMessengerCreateInfoEXT {
+			sType = vk.StructureType.DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			messageSeverity = {.VERBOSE, .INFO, .ERROR, .WARNING},
+			messageType = {.GENERAL, .VALIDATION, .PERFORMANCE},
+			pfnUserCallback = debug_callback,
+		}
 
-		vkx_populate_debug_messenger_create_info(&debug_create_info);
-		instance_create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debug_create_info;
+		instance_create_info.pNext = &debug_create_info
+
 	} else {
-	*/
 		instance_create_info.enabledLayerCount = 0
 		instance_create_info.pNext = nil
-	// }
+	}
 	
 	// ----- Create the Vulkan instance -----
-	if (vk.CreateInstance(&instance_create_info, nil, &instance.instance) != .SUCCESS) {
-		fmt.fprintln(os.stderr, "failed to create instance!");
+	if result := vk.CreateInstance(&instance_create_info, nil, &instance.instance); result != .SUCCESS {
+		fmt.fprintln(os.stderr, "failed to create instance! Result:", result);
 		os.exit(1);
 	}
 

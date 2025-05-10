@@ -6,9 +6,45 @@ import "core:time"
 import "core:math/rand"
 import sdl "vendor:sdl3"
 
+// Simple vector types
+Vec2 :: [2]f32
+Vec3 :: [3]f32
+Vec4 :: [4]f32
+
+// Struct for vertex based geometry (i.e. the tiles)
 Vertex :: struct {
-	pos: [3]f32,
-	tex_coord: [2]f32,
+	pos: Vec3,
+	tex_coord: Vec2,
+}
+
+// This struct stores a sprite in a vertex array
+VertexBufferSprite :: struct {
+	// RGBA colour for rendering
+	color: Vec4,
+	// Texture coordinates
+	uv: Vec2,
+	uv2: Vec2,
+	// Texture index
+	texture_index: u32,
+	// Index into arrays in ubo
+	sprite_index: u32,
+}
+
+// Monster struct for game logic
+Monster :: struct {
+	pos: Vec3,
+	spd: Vec2,
+	color: Vec4,
+	texture: u32,
+}
+
+// Texture indices
+Texture :: enum {
+	TEX_TILES,
+	TEX_MONSTERS,
+	TEX_MONSTERS2,
+	TEX_MONSTERS3,
+	TEX_MONSTERS4,
 }
 
 TILESET_X_TILES :: 3
@@ -44,6 +80,12 @@ vertices: [dynamic]Vertex
 
 // Indices for the tilemap geometry
 vertex_indices: [dynamic]u16
+
+// "Vertices" for the sprites
+vertex_sprites: [dynamic]VertexBufferSprite
+
+// Monster data
+monsters: [NUM_MONSTERS]Monster
 
 /*
  * Return the index of the tile at (x, y)
@@ -157,6 +199,66 @@ create_tiles :: proc() {
 	}
 }
 
+create_monsters :: proc() {
+	// Create the array to hold sprite data (6 "vertices" per monster)
+	vertex_sprites = make([dynamic]VertexBufferSprite, NUM_MONSTERS * 6)
+
+	// Create the monsters and their and their "sprites"
+	for i := 0; i < NUM_MONSTERS; i += 1 {
+		monsters[i].pos[0] = rand.float32_range(0, X_TILES)
+		monsters[i].pos[1] = rand.float32_range(0, Y_TILES)
+		// Half of the monsters will be in front of the tiles and half
+		// will be behind
+		monsters[i].pos[2] = rand.float32_range(1, 19)
+
+		monsters[i].spd[0] = rand.float32_range(-5, 5)
+		monsters[i].spd[1] = rand.float32_range(-5, 5)
+		
+		// Fade to blue as the monsters z coord puts them in the background
+		blue_fade := monsters[i].pos[2] / 20.0
+		monsters[i].color[0] = 1.0 - blue_fade
+		monsters[i].color[1] = 1.0 - blue_fade
+		monsters[i].color[2] = 1.0 - blue_fade * 0.6
+		monsters[i].color[3] = 1.0
+
+		monsters[i].texture = u32(Texture.TEX_MONSTERS) + u32((i / 16) % 4)
+
+		assert(monsters[i].texture < len(Texture))
+		assert(monsters[i].texture >= u32(Texture.TEX_MONSTERS))
+
+		// Create the sprite vertices
+		for j := 0; j < 6; j += 1 {
+			idx := i * 6 + j
+			assert(idx < len(vertex_sprites))
+
+			for k := 0; k < 4; k += 1 {
+				vertex_sprites[idx].color[k] = monsters[i].color[k]
+			}
+			// Calculate uv index base on 8x8 grid of sprites
+			sprite_x := i % 4
+			sprite_y := (i % 16) / 4
+			uv_scale: f32 = 1.0 / 4.0
+
+			vertex_sprites[idx].uv[0] = uv_scale * f32(sprite_x)
+			vertex_sprites[idx].uv[1] = uv_scale * f32(sprite_y)
+			vertex_sprites[idx].uv2[0] = vertex_sprites[idx].uv[0] + uv_scale
+			vertex_sprites[idx].uv2[1] = vertex_sprites[idx].uv[1] + uv_scale
+			vertex_sprites[idx].texture_index = monsters[i].texture
+			vertex_sprites[idx].sprite_index = u32(i)
+
+			assert(vertex_sprites[idx].uv[0] >= 0.0)
+			assert(vertex_sprites[idx].uv[0] <= 1.0)
+			assert(vertex_sprites[idx].uv[1] >= 0.0)
+			assert(vertex_sprites[idx].uv[1] <= 1.0)
+			assert(vertex_sprites[idx].uv2[0] >= 0.0)
+			assert(vertex_sprites[idx].uv2[0] <= 1.0)
+			assert(vertex_sprites[idx].uv2[1] >= 0.0)
+			assert(vertex_sprites[idx].uv2[1] <= 1.0)
+		}
+	}
+}
+
+
 main :: proc() {
 	fmt.println("Hello, Vulkan!\n")
 
@@ -175,18 +277,18 @@ main :: proc() {
     }
 
     sdl.SetWindowPosition(window, sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED)
-	fmt.println("SDL window created");
+	fmt.println("SDL window created")
 
 	// Don't let the window shrink
 	sdl.SetWindowMinimumSize(window, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
 
 	// Create the tiles
-	create_tiles();
+	create_tiles()
+
+	// Create the monsters
+	create_monsters()
 
 	/*
-	// Create the monsters
-	create_monsters();
-
 	// Initialise Vulkan
 	init_vulkan();
 	

@@ -315,103 +315,107 @@ init_instance :: proc(window: ^sdl.Window) {
 		os.exit(1)
 	}
 
-	/*
 	// ----- Create the logical device -----
 
 	// Next we need to create a logical device to interface with the physical device
 	// (and also the graphics and presentation queues)
 	
-	VkxQueueFamilyIndices physical_indices = vkx_find_queue_families(vkx_instance.physical_device, vkx_instance.surface);
+	physical_indices := find_queue_families(instance.physical_device, instance.surface)
 	
 	// I don't fully understand why, but sometimes it looks like both families could be the same
-	uint32_t unique_queue_families[2] = {physical_indices.graphics_family, physical_indices.present_family};
-	uint32_t num_unique_queue_families = unique_queue_families[0] == unique_queue_families[1] ? 1 : 2;
-	VkDeviceQueueCreateInfo* queue_create_infos = malloc(sizeof(VkDeviceQueueCreateInfo) * num_unique_queue_families);
+	unique_queue_families: [2]u32 = {physical_indices.graphics_family, physical_indices.present_family}
+	num_unique_queue_families := unique_queue_families[0] == unique_queue_families[1] ? 1 : 2
+	queue_create_infos := make([]vk.DeviceQueueCreateInfo, num_unique_queue_families, context.temp_allocator)
 
-	float queue_priority = 1.0f;
-	for (uint32_t i = 0; i < num_unique_queue_families; i++) {
-		VkDeviceQueueCreateInfo queue_create_info = {0};
-		queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queue_create_info.queueFamilyIndex = unique_queue_families[i];
-		queue_create_info.queueCount = 1;
-		queue_create_info.pQueuePriorities = &queue_priority;
-
-		queue_create_infos[i] = queue_create_info;
+	queue_priority: f32 = 1.0
+	for i := 0; i < num_unique_queue_families; i += 1 {
+		queue_create_infos[i].sType = vk.StructureType.DEVICE_QUEUE_CREATE_INFO
+		queue_create_infos[i].queueFamilyIndex = unique_queue_families[i]
+		queue_create_infos[i].queueCount = 1
+		queue_create_infos[i].pQueuePriorities = &queue_priority
 	}
 
-	VkPhysicalDeviceVulkan13Features vulkan13_features = {0};
-	vulkan13_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-	vulkan13_features.dynamicRendering = VK_TRUE;
-	vulkan13_features.synchronization2 = VK_TRUE;
+	vulkan13_features := vk.PhysicalDeviceVulkan13Features {
+		sType = vk.StructureType.PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+		dynamicRendering = true,
+		synchronization2 = true,
+	}
 
-	VkPhysicalDeviceVulkan12Features vulkan12_features = {0};
-	vulkan12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-	vulkan12_features.descriptorIndexing = VK_TRUE;
-	vulkan12_features.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
-	vulkan12_features.pNext = &vulkan13_features;
+	vulkan12_features := vk.PhysicalDeviceVulkan12Features {
+		sType = vk.StructureType.PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+		descriptorIndexing = true,
+		shaderSampledImageArrayNonUniformIndexing = true,
+		pNext = &vulkan13_features,
+	}
+
+	features2 := vk.PhysicalDeviceFeatures2 {
+		sType = vk.StructureType.PHYSICAL_DEVICE_FEATURES_2,
+		features = vk.PhysicalDeviceFeatures {
+			samplerAnisotropy = true,
+		},
+		pNext = &vulkan12_features,
+	}
 	
-	VkPhysicalDeviceFeatures2 features2 = {0};
-	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	features2.features.samplerAnisotropy = VK_TRUE;
-	features2.pNext = &vulkan12_features;
+	device_extensions := DEVICE_EXTENSIONS
 
-	VkDeviceCreateInfo create_info = {0};
-	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-
-	create_info.queueCreateInfoCount = num_unique_queue_families;
-	create_info.pQueueCreateInfos = queue_create_infos;
-
-	create_info.enabledExtensionCount = VKX_NUM_DEVICE_EXTENSIONS;
-	create_info.ppEnabledExtensionNames = device_extensions;
-
-	create_info.pNext = &features2;
-
-	printf(" Requesting device extensions:\n");
-
-	for (uint32_t i = 0; i < create_info.enabledExtensionCount; i++) {
-		printf("  Extension: %s\n", create_info.ppEnabledExtensionNames[i]);
+	create_info := vk.DeviceCreateInfo {
+		sType = vk.StructureType.DEVICE_CREATE_INFO,
+		queueCreateInfoCount = u32(num_unique_queue_families),
+		pQueueCreateInfos = raw_data(queue_create_infos),
+		enabledExtensionCount = len(device_extensions),
+		ppEnabledExtensionNames = &device_extensions[0],
+		pNext = &features2,
 	}
 
+	fmt.println(" Requesting device extensions:")
+
+	for i: u32 = 0; i < create_info.enabledExtensionCount; i += 1 {
+		fmt.printfln("  Extension: %s", create_info.ppEnabledExtensionNames[i])
+	}
+
+	/*
 	if (enable_validation_layers) {
-		create_info.enabledLayerCount = VKX_NUM_VALIDATION_LAYERS;
-		create_info.ppEnabledLayerNames = validation_layers;
+		create_info.enabledLayerCount = VKX_NUM_VALIDATION_LAYERS
+		create_info.ppEnabledLayerNames = validation_layers
 	} else {
-		create_info.enabledLayerCount = 0;
+	*/
+		create_info.enabledLayerCount = 0
+	/*
+	}
+	*/
+	
+	if vk.CreateDevice(instance.physical_device, &create_info, nil, &instance.device) != .SUCCESS {
+		fmt.fprintln(os.stderr, "failed to create logical device!")
+		os.exit(1)
 	}
 
-	if (vkCreateDevice(vkx_instance.physical_device, &create_info, NULL, &vkx_instance.device) != VK_SUCCESS) {
-		fprintf(stderr, "failed to create logical device!\n");
-		exit(1);
-	}
-
-	free(queue_create_infos);
-
-	vkGetDeviceQueue(vkx_instance.device, physical_indices.graphics_family, 0, &vkx_instance.graphics_queue);
-	vkGetDeviceQueue(vkx_instance.device, physical_indices.present_family, 0, &vkx_instance.present_queue);
+	vk.GetDeviceQueue(instance.device, physical_indices.graphics_family, 0, &instance.graphics_queue)
+	vk.GetDeviceQueue(instance.device, physical_indices.present_family, 0, &instance.present_queue)
 
 	// ----- Create the command pool -----
-	VkCommandPoolCreateInfo command_pool_info = {0};
-	command_pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	command_pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	command_pool_info.queueFamilyIndex = physical_indices.graphics_family;
+	command_pool_info := vk.CommandPoolCreateInfo {
+		sType = vk.StructureType.COMMAND_POOL_CREATE_INFO,
+		flags = {.RESET_COMMAND_BUFFER},
+		queueFamilyIndex = physical_indices.graphics_family,
+	}
 
-	if (vkCreateCommandPool(vkx_instance.device, &command_pool_info, NULL, &vkx_instance.command_pool) != VK_SUCCESS) {
-		fprintf(stderr, "failed to create command pool!\n");
-		exit(1);
+	if vk.CreateCommandPool(instance.device, &command_pool_info, nil, &instance.command_pool) != .SUCCESS {
+		fmt.fprintln(os.stderr, "failed to create command pool!\n")
+		os.exit(1)
 	}
 
 	// ----- Create the command buffers -----
-	vkx_instance.command_buffers_count = VKX_FRAMES_IN_FLIGHT;
+	instance.command_buffers = make([]vk.CommandBuffer, FRAMES_IN_FLIGHT)
 
-	VkCommandBufferAllocateInfo buf_alloc_info = {0};
-	buf_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	buf_alloc_info.commandPool = vkx_instance.command_pool;
-	buf_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	buf_alloc_info.commandBufferCount = vkx_instance.command_buffers_count;
-
-	if (vkAllocateCommandBuffers(vkx_instance.device, &buf_alloc_info, vkx_instance.command_buffers) != VK_SUCCESS) {
-		fprintf(stderr, "failed to allocate command buffers!\n");
-		exit(1);
+	buf_alloc_info := vk.CommandBufferAllocateInfo {
+		sType = vk.StructureType.COMMAND_BUFFER_ALLOCATE_INFO,
+		commandPool = instance.command_pool,
+		level = vk.CommandBufferLevel.PRIMARY,
+		commandBufferCount = FRAMES_IN_FLIGHT,
 	}
-	*/
+
+	if vk.AllocateCommandBuffers(instance.device, &buf_alloc_info, &instance.command_buffers[0]) != .SUCCESS {
+		fmt.fprintln(os.stderr, "failed to allocate command buffers!")
+		os.exit(1)
+	}
 }

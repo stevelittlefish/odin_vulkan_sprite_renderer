@@ -5,19 +5,6 @@ import "core:fmt"
 import vk "vendor:vulkan"
 import sdl "vendor:sdl3"
 
-// Compile time flags
-ENABLE_VALIDATION_LAYERS :: #config(ENABLE_VALIDATION_LAYERS, false)
-
-// The number of validation layers that are enabled
-NUM_VALIDATION_LAYERS :: 1 when ENABLE_VALIDATION_LAYERS else 0
-// The set of validation layers, for when they are enabled
-VALIDATION_LAYERS :: cast([1]cstring) {"VK_LAYER_KHRONOS_validation"}
-
-DEVICE_EXTENSIONS :: cast([2]cstring) {
-	vk.KHR_SWAPCHAIN_EXTENSION_NAME,
-	vk.EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
-}
-
 // Main VKX Instance struct
 Instance :: struct {
 	// Vulkan instance
@@ -48,7 +35,7 @@ Instance :: struct {
 	command_pool: vk.CommandPool,
 
 	// Command buffers for each frame in flight
-	command_buffers: [dynamic]vk.CommandBuffer,
+	command_buffers: []vk.CommandBuffer,
 }
 
 QueueFamilyIndices :: struct {
@@ -66,6 +53,22 @@ SwapChainSupportDetails :: struct {
 	present_modes: []vk.PresentModeKHR,
 }
 
+// Compile time flags
+ENABLE_VALIDATION_LAYERS :: #config(ENABLE_VALIDATION_LAYERS, false)
+
+// The number of validation layers that are enabled
+NUM_VALIDATION_LAYERS :: 1 when ENABLE_VALIDATION_LAYERS else 0
+// The set of validation layers, for when they are enabled
+VALIDATION_LAYERS :: cast([1]cstring) {"VK_LAYER_KHRONOS_validation"}
+
+// Constants
+
+DEVICE_EXTENSIONS :: cast([2]cstring) {
+	vk.KHR_SWAPCHAIN_EXTENSION_NAME,
+	vk.EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
+}
+
+FRAMES_IN_FLIGHT :: 2
 
 // Main global instance
 instance: Instance

@@ -6,6 +6,11 @@ import "core:time"
 import "core:math/rand"
 import sdl "vendor:sdl3"
 
+Vertex :: struct {
+	pos: [3]f32,
+	tex_coord: [2]f32,
+}
+
 TILESET_X_TILES :: 3
 TILESET_Y_TILES :: 3
 
@@ -28,9 +33,17 @@ SCREEN_HEIGHT :: Y_TILES * 32
 DEFAULT_WIDTH :: X_TILES * 32
 DEFAULT_HEIGHT :: Y_TILES * 32
 
+// SDL Window handle
 window: ^sdl.Window = nil
 
+// Tile data - which visual tile to display (or EMPTY)
 tiles: [TOTAL_TILES]u8
+
+// Vertices for the tilemap geometry
+vertices: [dynamic]Vertex
+
+// Indices for the tilemap geometry
+vertex_indices: [dynamic]u16
 
 /*
  * Return the index of the tile at (x, y)
@@ -78,78 +91,70 @@ create_tiles :: proc() {
 		fmt.print("\n")
 	}
 	
-	/*
 	// Generate the mesh for the tilemap
 	
 	// First let's allocate some memory for the vertices and indices
 	// We need 4 vertices per tile, and 6 indices per tile
-	vertices_count = num_tiles * 4;
-	vertices = malloc(sizeof(Vertex) * vertices_count);
-	vertex_indices_count = num_tiles * 6;
-	vertex_indices = malloc(sizeof(uint16_t) * vertex_indices_count);
+	vertices = make([dynamic]Vertex, num_tiles * 4)
+	vertex_indices = make([dynamic]u16, num_tiles * 6)
 
 	// Loop through and add the geometry for each tile
-	size_t vertex_idx = 0;
-	size_t index_idx = 0;
+	vertex_idx := 0
+	index_idx := 0
 
-	for (size_t x = 0; x < X_TILES; x++) {
-		for (size_t y = 0; y < Y_TILES; y++) {
-			size_t idx = get_tile_index(x, y);
-			if (tiles[idx] == EMPTY) {
-				continue;
+	for x := 0; x < X_TILES; x += 1 {
+		for y := 0; y < Y_TILES; y += 1 {
+			idx := get_tile_index(x, y)
+			if tiles[idx] == EMPTY {
+				continue
 			}
 
 			// We need to calculate the grid coords of the texture tile
-			size_t tileset_idx = tiles[idx];
-			size_t tileset_x = tileset_idx % TILESET_X_TILES;
-			size_t tileset_y = tileset_idx / TILESET_X_TILES;
+			tileset_idx := tiles[idx]
+			tileset_x := tileset_idx % TILESET_X_TILES
+			tileset_y := tileset_idx / TILESET_X_TILES
 
 			// Tiles are 1x1, so we can just use the x and y coordinates as the vertex positions
 			// We can leave all z coordinates as 0.0f. We'll update colours later
 			
 			// Bottom left
-			vertices[vertex_idx].pos[0] = (float) x;
-			vertices[vertex_idx].pos[1] = (float) y;
-			vertices[vertex_idx].tex_coord[0] = (float) tileset_x / TILESET_X_TILES;
-			vertices[vertex_idx].tex_coord[1] = (float) tileset_y / TILESET_Y_TILES + 1.0f / TILESET_Y_TILES;
-			vertex_idx++;
+			vertices[vertex_idx].pos[0] = f32(x)
+			vertices[vertex_idx].pos[1] = f32(y)
+			vertices[vertex_idx].tex_coord[0] = f32(tileset_x) / TILESET_X_TILES
+			vertices[vertex_idx].tex_coord[1] = f32(tileset_y) / TILESET_Y_TILES + 1.0 / TILESET_Y_TILES
+			vertex_idx += 1
 
 			// Bottom right
-			vertices[vertex_idx].pos[0] = (float) x + 1.0f;
-			vertices[vertex_idx].pos[1] = (float) y;
-			vertices[vertex_idx].tex_coord[0] = (float) tileset_x / TILESET_X_TILES + 1.0f / TILESET_X_TILES;
-			vertices[vertex_idx].tex_coord[1] = (float) tileset_y / TILESET_Y_TILES + 1.0f / TILESET_Y_TILES;
-			vertex_idx++;
+			vertices[vertex_idx].pos[0] = f32(x) + 1.0
+			vertices[vertex_idx].pos[1] = f32(y)
+			vertices[vertex_idx].tex_coord[0] = f32(tileset_x) / TILESET_X_TILES + 1.0 / TILESET_X_TILES
+			vertices[vertex_idx].tex_coord[1] = f32(tileset_y) / TILESET_Y_TILES + 1.0 / TILESET_Y_TILES
+			vertex_idx += 1
 
 			// Top right
-			vertices[vertex_idx].pos[0] = (float) x + 1.0f;
-			vertices[vertex_idx].pos[1] = (float) y + 1.0f;
-			vertices[vertex_idx].tex_coord[0] = (float) tileset_x / TILESET_X_TILES + 1.0f / TILESET_X_TILES;
-			vertices[vertex_idx].tex_coord[1] = (float) tileset_y / TILESET_Y_TILES;
-			vertex_idx++;
+			vertices[vertex_idx].pos[0] = f32(x) + 1.0
+			vertices[vertex_idx].pos[1] = f32(y) + 1.0
+			vertices[vertex_idx].tex_coord[0] = f32(tileset_x) / TILESET_X_TILES + 1.0 / TILESET_X_TILES
+			vertices[vertex_idx].tex_coord[1] = f32(tileset_y) / TILESET_Y_TILES
+			vertex_idx += 1
 
 			// Top left
-			vertices[vertex_idx].pos[0] = (float) x;
-			vertices[vertex_idx].pos[1] = (float) y + 1.0f;
-			vertices[vertex_idx].tex_coord[0] = (float) tileset_x / TILESET_X_TILES;
-			vertices[vertex_idx].tex_coord[1] = (float) tileset_y / TILESET_Y_TILES;
-			vertex_idx++;
+			vertices[vertex_idx].pos[0] = f32(x)
+			vertices[vertex_idx].pos[1] = f32(y) + 1.0
+			vertices[vertex_idx].tex_coord[0] = f32(tileset_x) / TILESET_X_TILES
+			vertices[vertex_idx].tex_coord[1] = f32(tileset_y) / TILESET_Y_TILES
+			vertex_idx += 1
 
 			// Now we need to add the indices for this tile
-			vertex_indices[index_idx++] = vertex_idx - 4; // Bottom left
-			vertex_indices[index_idx++] = vertex_idx - 3; // Bottom right
-			vertex_indices[index_idx++] = vertex_idx - 2; // Top right
-			vertex_indices[index_idx++] = vertex_idx - 2; // Top right
-			vertex_indices[index_idx++] = vertex_idx - 1; // Top left
-			vertex_indices[index_idx++] = vertex_idx - 4; // Bottom left
+			vertex_indices[index_idx] = u16(vertex_idx - 4)      // Bottom left
+			vertex_indices[index_idx + 1] = u16(vertex_idx - 3)  // Bottom right
+			vertex_indices[index_idx + 2] = u16(vertex_idx - 2)  // Top right
+			vertex_indices[index_idx + 3] = u16(vertex_idx - 2)  // Top right
+			vertex_indices[index_idx + 4] = u16(vertex_idx - 1)  // Top left
+			vertex_indices[index_idx + 5] = u16(vertex_idx - 4)  // Bottom left
+			index_idx += 6
 		}
 	}
-
-	// Loop through all vertices now and set z coord
-	for (size_t i = 0; i < vertices_count; i++) {
-		vertices[i].pos[2] = 0.0f;
-	}
-	*/
 }
 
 main :: proc() {

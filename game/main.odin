@@ -265,10 +265,10 @@ init_vulkan :: proc() {
 	// ----- Initialise the vulkan instance and devices -----
 	vkx.init_instance(window)
 
-	/*
 	// ----- Create the swap chain -----
-	vkx_create_swap_chain(false);
+	vkx.create_swap_chain()
 	
+	/*
 	// ----- Create the graphics pipeline -----
 	// Vertex input bindng and attributes
 	VkVertexInputBindingDescription binding_description = get_binding_description();

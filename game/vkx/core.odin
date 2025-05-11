@@ -64,11 +64,11 @@ ENABLE_VALIDATION_LAYERS :: #config(ENABLE_VALIDATION_LAYERS, false)
 // The number of validation layers that are enabled
 NUM_VALIDATION_LAYERS :: 1 when ENABLE_VALIDATION_LAYERS else 0
 // The set of validation layers, for when they are enabled
-VALIDATION_LAYERS :: cast([1]cstring) {"VK_LAYER_KHRONOS_validation"}
+VALIDATION_LAYERS :: [1]cstring{"VK_LAYER_KHRONOS_validation"}
 
 // Constants
 
-DEVICE_EXTENSIONS :: cast([2]cstring) {
+DEVICE_EXTENSIONS :: [2]cstring{
 	vk.KHR_SWAPCHAIN_EXTENSION_NAME,
 	vk.EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
 }

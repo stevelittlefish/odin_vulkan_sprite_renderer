@@ -6,7 +6,7 @@ import "core:fmt"
 import "core:strings"
 import "core:os"
 import vk "vendor:vulkan"
-import sdl "vendor:sdl3"
+import "vendor:glfw"
 
 
 check_validation_layer_support :: proc() -> bool {
@@ -56,18 +56,13 @@ get_required_extensions :: proc(count: ^u32) -> []cstring {
 	assert(count != nil)
 	
 	// Get the required extensions from SDL and set count to the number of extensions
-	sdl_extensions := sdl.Vulkan_GetInstanceExtensions(count);
+	glfw_extensions := glfw.GetRequiredInstanceExtensions()
 
-	if sdl_extensions == nil {
-		fmt.fprintln(os.stderr, "Failed to get required extensions from GLFW")
-		os.exit(1)
-	}
-	
 	if (!ENABLE_VALIDATION_LAYERS) {
-		// Just copy the SDL sdl_extensions
+		// Just copy the GLFW extensions
 		out := make([]cstring, count^)
 		for i := 0; i < int(count^); i += 1 {
-			out[i] = sdl_extensions[i]
+			out[i] = glfw_extensions[i]
 		}
 		return out
 	}
@@ -78,7 +73,7 @@ get_required_extensions :: proc(count: ^u32) -> []cstring {
 
 	// Copy the SDL extension layers
 	for i := 0; i < int(count^); i += 1 {
-		out[i] = sdl_extensions[i]
+		out[i] = glfw_extensions[i]
 	}
 	for j := 0; j < NUM_VALIDATION_LAYERS; j += 1 {
 		out[int(count^) + j] = validation_layers[j]
@@ -197,7 +192,7 @@ pick_physical_device :: proc() -> vk.PhysicalDevice {
 	return physical_device
 }
 
-init_instance :: proc(window: ^sdl.Window) {
+init_instance :: proc(window: glfw.WindowHandle) {
 	fmt.println("Initialising Vulkan (VKX)");
 	
 	// Keep a reference to the window to avoid passing it around later
@@ -205,14 +200,16 @@ init_instance :: proc(window: ^sdl.Window) {
 	
 
 	// Load Vulkan
-	proc_addr := sdl.Vulkan_GetVkGetInstanceProcAddr()
-	if proc_addr == nil {
-		fmt.fprintfln(os.stderr, "Vulkan proc address is null!")
-		os.exit(1)
-	}
+	// proc_addr := sdl.Vulkan_GetVkGetInstanceProcAddr()
+	// if proc_addr == nil {
+	// 	fmt.fprintfln(os.stderr, "Vulkan proc address is null!")
+	// 	os.exit(1)
+	// }
 
-	vk.load_proc_addresses_global(cast(rawptr)proc_addr)
+	// vk.load_proc_addresses_global(cast(rawptr)proc_addr)
 	
+    vk.load_proc_addresses(rawptr(glfw.GetInstanceProcAddress))
+
 	// Should be loaded now
 	assert(vk.CreateInstance != nil)
 
@@ -300,10 +297,10 @@ init_instance :: proc(window: ^sdl.Window) {
 	*/
 
 	// ----- Create the window surface -----
-	if !sdl.Vulkan_CreateSurface(window, instance.instance, nil, &instance.surface) {
-		fmt.fprintfln(os.stderr, "failed to create window surface!")
-		os.exit(1)
-	}
+	// if glfw.CreateWindowSurface(instance.instance, window) != .SUCCESS {
+	// 	fmt.fprintfln(os.stderr, "failed to create window surface!")
+	// 	os.exit(1)
+	// }
 
 	// ----- Pick a physical device -----
 	

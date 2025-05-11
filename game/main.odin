@@ -4,7 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:time"
 import "core:math/rand"
-import sdl "vendor:sdl3"
+import "vendor:glfw"
 
 import "vkx"
 
@@ -71,8 +71,8 @@ SCREEN_HEIGHT :: Y_TILES * 32
 DEFAULT_WIDTH :: X_TILES * 32
 DEFAULT_HEIGHT :: Y_TILES * 32
 
-// SDL Window handle
-window: ^sdl.Window = nil
+// GLFW Window handle
+window: glfw.WindowHandle
 
 // Tile data - which visual tile to display (or EMPTY)
 tiles: [TOTAL_TILES]u8
@@ -555,25 +555,20 @@ init_vulkan :: proc() {
 main :: proc() {
 	fmt.println("Hello, Vulkan!\n")
 
-	// Initialise SDL
-	if !sdl.Init(sdl.INIT_VIDEO) {
-		fmt.printf("SLD initialisation failed: %s\n", sdl.GetError())
-	}
-
 	// Create the window
-	window_flags := sdl.WINDOW_VULKAN | sdl.WINDOW_HIDDEN | sdl.WINDOW_RESIZABLE
-	window = sdl.CreateWindow("Vulkan", DEFAULT_WIDTH, DEFAULT_HEIGHT, window_flags)
-    if (window == nil) {
-		fmt.printf("Window creation failed: %s\n", sdl.GetError())
-        sdl.Quit()
-		os.exit(1)
+    if !bool(glfw.Init()) {
+        fmt.eprintln("GLFW has failed to load.")
+        return
     }
+    gl_false : i32 = 0
+    glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
+    glfw.WindowHint(glfw.RESIZABLE, gl_false)
 
-    sdl.SetWindowPosition(window, sdl.WINDOWPOS_CENTERED, sdl.WINDOWPOS_CENTERED)
-	fmt.println("SDL window created")
-
-	// Don't let the window shrink
-	sdl.SetWindowMinimumSize(window, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+    window = glfw.CreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "GLFW Window", nil, nil)
+    if window == nil {
+        fmt.eprintln("GLFW has failed to load the window.")
+        return
+    }
 
 	// Create the tiles
 	create_tiles()
@@ -661,9 +656,9 @@ main :: proc() {
 	*/
 
 	// Cleanup SDL
-	fmt.println("Cleaning up SDL")
-    sdl.DestroyWindow(window)
-    sdl.Quit()
+	// fmt.println("Cleaning up SDL")
+    // sdl.DestroyWindow(window)
+    // sdl.Quit()
 	
 	fmt.println("Goodbye Vulkan!")
 

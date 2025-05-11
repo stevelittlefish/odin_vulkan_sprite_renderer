@@ -4,7 +4,7 @@ package vkx
 import "core:fmt"
 import "core:os"
 import vk "vendor:vulkan"
-import sdl "vendor:sdl3"
+import "vendor:glfw"
 
 // Main VKX Instance struct
 Instance :: struct {
@@ -12,8 +12,8 @@ Instance :: struct {
 	instance: vk.Instance,
 	// Vulkan debug messenger
 	debug_messenger: vk.DebugUtilsMessengerEXT,
-	// SDL window that we are rendering to
-	window: ^sdl.Window,
+	// GLFW window that we are rendering to
+	window: glfw.WindowHandle,
 	// Surface from the SDL window
 	surface: vk.SurfaceKHR,
 	// Physical device that we are using

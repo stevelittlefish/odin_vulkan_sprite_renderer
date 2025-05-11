@@ -4,37 +4,38 @@ package vkx
 import "core:fmt"
 import "core:os"
 import vk "vendor:vulkan"
-import sdl "vendor:sdl3"
+import glfw "vendor:glfw"
 
-choose_swap_extent :: proc(window: ^sdl.Window, capabilities: ^vk.SurfaceCapabilitiesKHR ) -> vk.Extent2D {
-	if (capabilities.currentExtent.width != 0xFFFFFFFF) {
-		return capabilities.currentExtent
-	} else {
-		width, height: i32
-		sdl.GetWindowSize(window, &width, &height)
+choose_swap_extent :: proc(window: glfw.WindowHandle, capabilities: ^vk.SurfaceCapabilitiesKHR ) -> vk.Extent2D {
+	// if (capabilities.currentExtent.width != 0xFFFFFFFF) {
+	// 	return capabilities.currentExtent
+	// } else {
+	// 	width, height: i32
+	// 	sdl.GetWindowSize(window, &width, &height)
 
-		actual_extent := vk.Extent2D{
-			width=u32(width),
-			height=u32(height),
-		}
-		
-		// Clamp the width and height to the min and max extents
-		if (actual_extent.width < capabilities.minImageExtent.width) {
-			actual_extent.width = capabilities.minImageExtent.width
-		}
-		else if (actual_extent.width > capabilities.maxImageExtent.width) {
-			actual_extent.width = capabilities.maxImageExtent.width
-		}
+	// 	actual_extent := vk.Extent2D{
+	// 		width=u32(width),
+	// 		height=u32(height),
+	// 	}
+	// 	
+	// 	// Clamp the width and height to the min and max extents
+	// 	if (actual_extent.width < capabilities.minImageExtent.width) {
+	// 		actual_extent.width = capabilities.minImageExtent.width
+	// 	}
+	// 	else if (actual_extent.width > capabilities.maxImageExtent.width) {
+	// 		actual_extent.width = capabilities.maxImageExtent.width
+	// 	}
 
-		if (actual_extent.height < capabilities.minImageExtent.height) {
-			actual_extent.height = capabilities.minImageExtent.height
-		}
-		else if (actual_extent.height > capabilities.maxImageExtent.height) {
-			actual_extent.height = capabilities.maxImageExtent.height
-		}
+	// 	if (actual_extent.height < capabilities.minImageExtent.height) {
+	// 		actual_extent.height = capabilities.minImageExtent.height
+	// 	}
+	// 	else if (actual_extent.height > capabilities.maxImageExtent.height) {
+	// 		actual_extent.height = capabilities.maxImageExtent.height
+	// 	}
 
-		return actual_extent
-	}
+	// 	return actual_extent
+	// }
+	return vk.Extent2D{}
 }
 
 create_swap_chain :: proc() {

@@ -4,7 +4,10 @@ import "core:fmt"
 import "core:os"
 import "core:time"
 import "core:math/rand"
+import "core:slice"
 import sdl "vendor:sdl3"
+
+import vk "vendor:vulkan"
 
 import "vkx"
 
@@ -580,9 +583,82 @@ main :: proc() {
 
 	// Create the monsters
 	create_monsters()
+	
+	// TODO: tmp code /////////////////////////////////////////////////////////////
+
+	vk.load_proc_addresses_global(rawptr(sdl.Vulkan_GetVkGetInstanceProcAddr()))
+	assert(vk.CreateInstance != nil, "vulkan function pointers not loaded")
+
+	create_info := vk.InstanceCreateInfo {
+		sType            = .INSTANCE_CREATE_INFO,
+		pApplicationInfo = &vk.ApplicationInfo {
+			sType = .APPLICATION_INFO,
+			pApplicationName = "Hello Triangle",
+			applicationVersion = vk.MAKE_VERSION(1, 0, 0),
+			pEngineName = "No Engine",
+			engineVersion = vk.MAKE_VERSION(1, 0, 0),
+			apiVersion = vk.API_VERSION_1_0,
+		},
+	}
+	
+	extension_count: u32
+	// extensions := slice.clone_to_dynamic(glfw.GetRequiredInstanceExtensions(), context.temp_allocator)
+	sdl_extensions := sdl.Vulkan_GetInstanceExtensions(&extension_count)
+	extensions: [dynamic]cstring
+	for i: u32 = 0; i < extension_count; i += 1 {
+		append(&extensions, sdl_extensions[i])
+	}
+
+	assert(len(extensions) == int(extension_count))
+
+	// MacOS is a special snowflake ;)
+	when ODIN_OS == .Darwin {
+		create_info.flags |= {.ENUMERATE_PORTABILITY_KHR}
+		append(&extensions, vk.KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)
+	}
+
+	when vkx.ENABLE_VALIDATION_LAYERS {
+		create_info.ppEnabledLayerNames = raw_data([]cstring{"VK_LAYER_KHRONOS_validation"})
+		create_info.enabledLayerCount = 1
+
+		append(&extensions, vk.EXT_DEBUG_UTILS_EXTENSION_NAME)
+
+		// Severity based on logger level.
+		severity: vk.DebugUtilsMessageSeverityFlagsEXT
+		if context.logger.lowest_level <= .Error {
+			severity |= {.ERROR}
+		}
+		if context.logger.lowest_level <= .Warning {
+			severity |= {.WARNING}
+		}
+		if context.logger.lowest_level <= .Info {
+			severity |= {.INFO}
+		}
+		if context.logger.lowest_level <= .Debug {
+			severity |= {.VERBOSE}
+		}
+
+		dbg_create_info := vk.DebugUtilsMessengerCreateInfoEXT {
+			sType           = .DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			messageSeverity = severity,
+			messageType     = {.GENERAL, .VALIDATION, .PERFORMANCE, .DEVICE_ADDRESS_BINDING}, // all of them.
+			pfnUserCallback = vkx.debug_callback
+		}
+		create_info.pNext = &dbg_create_info
+	}
+
+	create_info.enabledExtensionCount = u32(len(extensions))
+	create_info.ppEnabledExtensionNames = raw_data(extensions)
+
+	// must(vk.CreateInstance(&create_info, nil, &g_instance))
+	if result := vk.CreateInstance(&create_info, nil, &vkx.instance.instance); result != .SUCCESS {
+		fmt.eprintln("Error initialising vulkan:", result)
+		os.exit(1)
+	}
+	//       /tmp code ////////////////////////////////////////////////////////////
 
 	// Initialise Vulkan
-	init_vulkan();
+	//init_vulkan();
 	
 	/*
 	// Make the window visible

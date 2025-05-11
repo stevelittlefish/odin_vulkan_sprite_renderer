@@ -258,13 +258,15 @@ init_instance :: proc(window: ^sdl.Window) {
 			fmt.printfln("  Layer: %s", validation_layers[i])
 		}
 
-		instance_create_info.enabledLayerCount = NUM_VALIDATION_LAYERS
-		instance_create_info.ppEnabledLayerNames = &validation_layers[0]
+		// instance_create_info.enabledLayerCount = NUM_VALIDATION_LAYERS
+		instance_create_info.enabledLayerCount = 1
+		// instance_create_info.ppEnabledLayerNames = &validation_layers[0]
+		instance_create_info.ppEnabledLayerNames = raw_data([]cstring{"VK_LAYER_KHRONOS_validation"})
 		
 		debug_create_info := vk.DebugUtilsMessengerCreateInfoEXT {
 			sType = vk.StructureType.DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 			messageSeverity = {.VERBOSE, .INFO, .ERROR, .WARNING},
-			messageType = {.GENERAL, .VALIDATION, .PERFORMANCE},
+			messageType = {.GENERAL, .VALIDATION, .PERFORMANCE, .DEVICE_ADDRESS_BINDING},
 			pfnUserCallback = debug_callback,
 		}
 

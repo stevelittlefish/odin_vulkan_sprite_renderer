@@ -112,150 +112,156 @@ create_vertex_buffer_pipeline :: proc(
 	// ----- Load the shaders -----
 	vert_shader_module := load_shader_module(vert_shader_path)
 	frag_shader_module := load_shader_module(frag_shader_path)
-	// BOOKMARK
-	/*
-	
+
 	// ----- Create the graphics pipeline -----
-	VkPipelineShaderStageCreateInfo vert_shader_stage_info = {0}
-	vert_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
-	vert_shader_stage_info.stage = VK_SHADER_STAGE_VERTEX_BIT
-	vert_shader_stage_info.module = vert_shader_module
-	vert_shader_stage_info.pName = "main"
-
-	VkPipelineShaderStageCreateInfo frag_shader_stage_info = {0}
-	frag_shader_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
-	frag_shader_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT
-	frag_shader_stage_info.module = frag_shader_module
-	frag_shader_stage_info.pName = "main"
-
-	VkPipelineShaderStageCreateInfo shader_stages[] = {vert_shader_stage_info, frag_shader_stage_info}
+	shader_stages: []vk.PipelineShaderStageCreateInfo = {
+		vk.PipelineShaderStageCreateInfo {
+			sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+			stage = {.VERTEX},
+			module = vert_shader_module,
+			pName = "main",
+		},
+		vk.PipelineShaderStageCreateInfo {
+			sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+			stage = {.FRAGMENT},
+			module = frag_shader_module,
+			pName = "main",
+		}
+	}
 	
-	VkPipelineVertexInputStateCreateInfo vertex_input_info = {0}
-	vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
-	vertex_input_info.vertexBindingDescriptionCount = 1
-	vertex_input_info.vertexAttributeDescriptionCount = attribute_descriptions_count
-	vertex_input_info.pVertexBindingDescriptions = &binding_description
-	vertex_input_info.pVertexAttributeDescriptions = attribute_descriptions
+	binding_description_var := binding_description
 
-	VkPipelineInputAssemblyStateCreateInfo input_assembly = {0}
-	input_assembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO
-	input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-	input_assembly.primitiveRestartEnable = VK_FALSE
-
-	VkPipelineViewportStateCreateInfo viewport_state = {0}
-	viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO
-	viewport_state.viewportCount = 1
-	viewport_state.scissorCount = 1
-
-	VkPipelineRasterizationStateCreateInfo rasterizer = {0}
-	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO
-	rasterizer.depthClampEnable = VK_FALSE
-	rasterizer.rasterizerDiscardEnable = VK_FALSE
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL
-	rasterizer.lineWidth = 1.0f
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT
-	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE
-	rasterizer.depthBiasEnable = VK_FALSE
-
-	VkPipelineMultisampleStateCreateInfo multisampling = {0}
-	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO
-	multisampling.sampleShadingEnable = VK_FALSE
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-
-	VkPipelineColorBlendAttachmentState color_blend_attachment = {0}
-
-	if (BLEND_ENABLED) {
-		color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-		color_blend_attachment.blendEnable = VK_TRUE
-		color_blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA
-		color_blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
-		color_blend_attachment.colorBlendOp = VK_BLEND_OP_ADD
-		color_blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE
-		color_blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO
-		color_blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD
-	}
-	else {
-		color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-		color_blend_attachment.blendEnable = VK_FALSE
+	vertex_input_info := vk.PipelineVertexInputStateCreateInfo{
+		sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		vertexBindingDescriptionCount = 1,
+		vertexAttributeDescriptionCount = cast(u32) len(attribute_descriptions),
+		pVertexBindingDescriptions = &binding_description_var,
+		pVertexAttributeDescriptions = raw_data(attribute_descriptions),
 	}
 
-	VkPipelineColorBlendStateCreateInfo color_blending = {0}
-	color_blending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO
-	color_blending.logicOpEnable = VK_FALSE
-	color_blending.logicOp = VK_LOGIC_OP_COPY
-	color_blending.attachmentCount = 1
-	color_blending.pAttachments = &color_blend_attachment
-	color_blending.blendConstants[0] = 0.0f
-	color_blending.blendConstants[1] = 0.0f
-	color_blending.blendConstants[2] = 0.0f
-	color_blending.blendConstants[3] = 0.0f
+	input_assembly := vk.PipelineInputAssemblyStateCreateInfo {
+		sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		topology = .TRIANGLE_LIST,
+		primitiveRestartEnable = false,
+	}
 
-	VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR}
+	viewport_state := vk.PipelineViewportStateCreateInfo {
+		sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		viewportCount = 1,
+		scissorCount = 1,
+	}
 
-	VkPipelineDynamicStateCreateInfo dynamic_state = {0}
-	dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO
-	dynamic_state.dynamicStateCount = 2
-	dynamic_state.pDynamicStates = dynamic_states
+	rasterizer := vk.PipelineRasterizationStateCreateInfo {
+		sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		depthClampEnable = false,
+		rasterizerDiscardEnable = false,
+		polygonMode = .FILL,
+		lineWidth = 1.0,
+		cullMode = {.BACK},
+		frontFace = .COUNTER_CLOCKWISE,
+		depthBiasEnable = false,
+	}
 	
-
-	VkPipelineLayoutCreateInfo pipeline_layout_info = {0}
-	pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
-	pipeline_layout_info.setLayoutCount = 1
-	pipeline_layout_info.pSetLayouts = &pipeline.descriptor_set_layout
-	pipeline_layout_info.pushConstantRangeCount = 1
-	pipeline_layout_info.pPushConstantRanges = &push_constant_range
-
-	if (vkCreatePipelineLayout(vkx_instance.device, &pipeline_layout_info, NULL, &pipeline.layout) != VK_SUCCESS) {
-		fprintf(stderr, "failed to create pipeline layout!")
-		exit(1)
+	multisampling := vk.PipelineMultisampleStateCreateInfo {
+		sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		sampleShadingEnable = false,
+		rasterizationSamples = {._1},
 	}
 
-	VkPipelineRenderingCreateInfo rendering_info = {0}
-	rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO
-	rendering_info.colorAttachmentCount = 1
-	rendering_info.pColorAttachmentFormats = &vkx_swap_chain.image_format
-	rendering_info.depthAttachmentFormat = vkx_find_depth_format()
+	when BLEND_ENABLED {
+		color_blend_attachment := vk.PipelineColorBlendAttachmentState {
+			colorWriteMask = {.R, .G, .B, .A},
+			blendEnable = true,
+			srcColorBlendFactor = .SRC_ALPHA,
+			dstColorBlendFactor = .ONE_MINUS_SRC_ALPHA,
+			colorBlendOp = .ADD,
+			srcAlphaBlendFactor = .ONE,
+			dstAlphaBlendFactor = .ZERO,
+			alphaBlendOp = .ADD,
+		}
+	} else {
+		color_blend_attachment := vk.PipelineColorBlendAttachmentState {
+			colorWriteMask = {.R, .G, .B, .A},
+		}
+	}
+	
+	color_blending := vk.PipelineColorBlendStateCreateInfo {
+		sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		logicOpEnable = false,
+		logicOp = .COPY,
+		attachmentCount = 1,
+		pAttachments = &color_blend_attachment,
+		blendConstants = {0, 0, 0, 0},
+	}
+	
+	dynamic_states: [2]vk.DynamicState = {.VIEWPORT, .SCISSOR}
 
-	VkPipelineDepthStencilStateCreateInfo depth_stencil = {0}
-	depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO
-	depth_stencil.depthTestEnable = VK_TRUE
-	depth_stencil.depthWriteEnable = VK_TRUE
-	depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS
-	depth_stencil.depthBoundsTestEnable = VK_FALSE
-	depth_stencil.minDepthBounds = 0.0f
-	depth_stencil.maxDepthBounds = 1.0f
-	depth_stencil.stencilTestEnable = VK_FALSE
-	depth_stencil.front = (VkStencilOpState) {0}
-	depth_stencil.back = (VkStencilOpState) {0}
-
-	VkGraphicsPipelineCreateInfo pipeline_info = {0}
-	pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
-	pipeline_info.stageCount = 2
-	pipeline_info.pStages = shader_stages
-	pipeline_info.pVertexInputState = &vertex_input_info
-	pipeline_info.pInputAssemblyState = &input_assembly
-	pipeline_info.pViewportState = &viewport_state
-	pipeline_info.pRasterizationState = &rasterizer
-	pipeline_info.pMultisampleState = &multisampling
-	pipeline_info.pColorBlendState = &color_blending
-	pipeline_info.pDynamicState = &dynamic_state
-	pipeline_info.layout = pipeline.layout
-	pipeline_info.renderPass = VK_NULL_HANDLE
-	pipeline_info.subpass = 0
-	pipeline_info.basePipelineHandle = VK_NULL_HANDLE
-	pipeline_info.pDepthStencilState = &depth_stencil
-	pipeline_info.pNext = &rendering_info
-
-	if (vkCreateGraphicsPipelines(vkx_instance.device, VK_NULL_HANDLE, 1, &pipeline_info, NULL, &pipeline.pipeline) != VK_SUCCESS) {
-		fprintf(stderr, "failed to create graphics pipeline!")
-		exit(1)
+	dynamic_state := vk.PipelineDynamicStateCreateInfo {
+		sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		dynamicStateCount = 2,
+		pDynamicStates = &dynamic_states[0]
+	}
+	
+	push_constants_range_var := push_constants_range
+	pipeline_layout_info := vk.PipelineLayoutCreateInfo {
+		sType = .PIPELINE_LAYOUT_CREATE_INFO,
+		setLayoutCount = 1,
+		pSetLayouts = &pipeline.descriptor_set_layout,
+		pushConstantRangeCount = 1,
+		pPushConstantRanges = &push_constants_range_var,
 	}
 
-	vkDestroyShaderModule(vkx_instance.device, frag_shader_module, NULL)
-	vkDestroyShaderModule(vkx_instance.device, vert_shader_module, NULL)
+	if vk.CreatePipelineLayout(instance.device, &pipeline_layout_info, nil, &pipeline.layout) != .SUCCESS {
+		fmt.eprintfln("failed to create pipeline layout!")
+		os.exit(1)
+	}
 
-	printf(" Pipeline created\n")
+	rendering_info := vk.PipelineRenderingCreateInfo {
+		sType = .PIPELINE_RENDERING_CREATE_INFO,
+		colorAttachmentCount = 1,
+		pColorAttachmentFormats = &swap_chain.image_format,
+		depthAttachmentFormat = find_depth_format(),
+	}
+	
+	depth_stencil := vk.PipelineDepthStencilStateCreateInfo {
+		sType = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		depthTestEnable = true,
+		depthWriteEnable = true,
+		depthCompareOp = .LESS,
+		depthBoundsTestEnable = false,
+		minDepthBounds = 0.0,
+		maxDepthBounds = 1.0,
+		stencilTestEnable = false,
+		front = {},
+		back = {},
+	}
 
-	*/
+	pipeline_info := vk.GraphicsPipelineCreateInfo {
+		sType = .GRAPHICS_PIPELINE_CREATE_INFO,
+		stageCount = 2,
+		pStages = &shader_stages[0],
+		pVertexInputState = &vertex_input_info,
+		pInputAssemblyState = &input_assembly,
+		pViewportState = &viewport_state,
+		pRasterizationState = &rasterizer,
+		pMultisampleState = &multisampling,
+		pColorBlendState = &color_blending,
+		pDynamicState = &dynamic_state,
+		layout = pipeline.layout,
+		pDepthStencilState = &depth_stencil,
+		pNext = &rendering_info,
+	}
+
+	if vk.CreateGraphicsPipelines(instance.device, 0, 1, &pipeline_info, nil, &pipeline.pipeline) != .SUCCESS {
+		fmt.eprintln("failed to create graphics pipeline!")
+		os.exit(1)
+	}
+
+	// Clean up the shader modules
+	vk.DestroyShaderModule(instance.device, frag_shader_module, nil)
+	vk.DestroyShaderModule(instance.device, vert_shader_module, nil)
+
+	fmt.printfln(" Pipeline created")
+
 	return pipeline
 }

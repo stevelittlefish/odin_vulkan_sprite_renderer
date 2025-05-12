@@ -171,5 +171,47 @@ create_image_view :: proc(
  		os.exit(1)
  	}
  
- 	return image_view;
+ 	return image_view
+}
+
+find_supported_format :: proc(candidates: []vk.Format, tiling: vk.ImageTiling, features: vk.FormatFeatureFlags) -> vk.Format {
+	/* 
+	 * Search through the list of candidates and find a supported format.
+	 *
+	 * @param candidates The list of candidate formats to search through
+	 * @param candidates_count The number of candidate formats
+	 * @param tiling The image tiling to use (linear or optimal)
+	 * @param features The format features to check for
+	 *
+	 * Used to find the format of the depth buffer from the tutorial at:
+	 * https://vulkan-tutorial.com/Depth_buffer
+	 */
+	for candidate in candidates {
+		props: vk.FormatProperties
+		vk.GetPhysicalDeviceFormatProperties(instance.physical_device, candidate, &props)
+		
+		if tiling == .LINEAR && props.linearTilingFeatures >= features {
+			return candidate
+		}
+
+		if tiling == .OPTIMAL && props.optimalTilingFeatures >= features {
+			return candidate
+		}
+	}
+
+	fmt.eprintln("Failed to find supported format")
+	os.exit(1)
+}
+
+find_depth_format :: proc() -> vk.Format {
+	/*
+	 * Find a supported depth format
+	 */
+	candidates := []vk.Format {
+		.D32_SFLOAT,
+		.D32_SFLOAT_S8_UINT,
+		.D24_UNORM_S8_UINT,
+	}
+	
+	return find_supported_format(candidates, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT})
 }

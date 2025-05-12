@@ -261,7 +261,159 @@ create_vertex_buffer_pipeline :: proc(
 	vk.DestroyShaderModule(instance.device, frag_shader_module, nil)
 	vk.DestroyShaderModule(instance.device, vert_shader_module, nil)
 
-	fmt.printfln(" Pipeline created")
+	fmt.printfln(" Vertex Buffer Pipeline created")
+
+	return pipeline
+}
+
+/*
+ * Create a graphics pipeline for rendering the offscreen image to the screen.
+ *
+ * The vertices for this pipeline must be hardcoded in the vertex shader.
+ *
+ * @param vert_shader_path The path to the vertex shader
+ * @param frag_shader_path The path to the fragment shader
+ */
+create_screen_pipeline :: proc(vert_shader_path: string, frag_shader_path: string) -> Pipeline {
+	pipeline: Pipeline
+	// Only 1 texture for the screen
+	pipeline.descriptor_set_layout = create_descriptor_set_layout(1)
+	
+	// ----- Load the shaders -----
+	vert_shader_module := load_shader_module(vert_shader_path)
+	frag_shader_module := load_shader_module(frag_shader_path)
+
+	// ----- Create the graphics pipeline -----
+	shader_stages: []vk.PipelineShaderStageCreateInfo = {
+		vk.PipelineShaderStageCreateInfo {
+			sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+			stage = {.VERTEX},
+			module = vert_shader_module,
+			pName = "main",
+		},
+		vk.PipelineShaderStageCreateInfo {
+			sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+			stage = {.FRAGMENT},
+			module = frag_shader_module,
+			pName = "main",
+		}
+	}
+	
+	vertex_input_info := vk.PipelineVertexInputStateCreateInfo{
+		sType = .PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		vertexBindingDescriptionCount = 0,
+		vertexAttributeDescriptionCount = 0,
+	}
+
+	input_assembly := vk.PipelineInputAssemblyStateCreateInfo {
+		sType = .PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		topology = .TRIANGLE_LIST,
+		primitiveRestartEnable = false,
+	}
+
+	viewport_state := vk.PipelineViewportStateCreateInfo {
+		sType = .PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		viewportCount = 1,
+		scissorCount = 1,
+	}
+
+	rasterizer := vk.PipelineRasterizationStateCreateInfo {
+		sType = .PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		depthClampEnable = false,
+		rasterizerDiscardEnable = false,
+		polygonMode = .FILL,
+		lineWidth = 1.0,
+		cullMode = {.BACK},
+		frontFace = .COUNTER_CLOCKWISE,
+		depthBiasEnable = false,
+	}
+	
+	multisampling := vk.PipelineMultisampleStateCreateInfo {
+		sType = .PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		sampleShadingEnable = false,
+		rasterizationSamples = {._1},
+	}
+	
+	// No blending
+	color_blend_attachment := vk.PipelineColorBlendAttachmentState {
+		colorWriteMask = {.R, .G, .B, .A},
+	}
+	
+	color_blending := vk.PipelineColorBlendStateCreateInfo {
+		sType = .PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		logicOpEnable = false,
+		logicOp = .COPY,
+		attachmentCount = 1,
+		pAttachments = &color_blend_attachment,
+		blendConstants = {0, 0, 0, 0},
+	}
+	
+	dynamic_states: [2]vk.DynamicState = {.VIEWPORT, .SCISSOR}
+
+	dynamic_state := vk.PipelineDynamicStateCreateInfo {
+		sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		dynamicStateCount = 2,
+		pDynamicStates = &dynamic_states[0]
+	}
+	
+	pipeline_layout_info := vk.PipelineLayoutCreateInfo {
+		sType = .PIPELINE_LAYOUT_CREATE_INFO,
+		setLayoutCount = 1,
+		pSetLayouts = &pipeline.descriptor_set_layout,
+		pushConstantRangeCount = 0,
+	}
+
+	if vk.CreatePipelineLayout(instance.device, &pipeline_layout_info, nil, &pipeline.layout) != .SUCCESS {
+		fmt.eprintfln("failed to create pipeline layout!")
+		os.exit(1)
+	}
+
+	rendering_info := vk.PipelineRenderingCreateInfo {
+		sType = .PIPELINE_RENDERING_CREATE_INFO,
+		colorAttachmentCount = 1,
+		pColorAttachmentFormats = &swap_chain.image_format,
+		depthAttachmentFormat = find_depth_format(),
+	}
+	
+	depth_stencil := vk.PipelineDepthStencilStateCreateInfo {
+		sType = .PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		depthTestEnable = true,
+		depthWriteEnable = true,
+		depthCompareOp = .LESS,
+		depthBoundsTestEnable = false,
+		minDepthBounds = 0.0,
+		maxDepthBounds = 1.0,
+		stencilTestEnable = false,
+		front = {},
+		back = {},
+	}
+
+	pipeline_info := vk.GraphicsPipelineCreateInfo {
+		sType = .GRAPHICS_PIPELINE_CREATE_INFO,
+		stageCount = 2,
+		pStages = &shader_stages[0],
+		pVertexInputState = &vertex_input_info,
+		pInputAssemblyState = &input_assembly,
+		pViewportState = &viewport_state,
+		pRasterizationState = &rasterizer,
+		pMultisampleState = &multisampling,
+		pColorBlendState = &color_blending,
+		pDynamicState = &dynamic_state,
+		layout = pipeline.layout,
+		pDepthStencilState = &depth_stencil,
+		pNext = &rendering_info,
+	}
+
+	if vk.CreateGraphicsPipelines(instance.device, 0, 1, &pipeline_info, nil, &pipeline.pipeline) != .SUCCESS {
+		fmt.eprintln("failed to create graphics pipeline!")
+		os.exit(1)
+	}
+
+	// Clean up the shader modules
+	vk.DestroyShaderModule(instance.device, frag_shader_module, nil)
+	vk.DestroyShaderModule(instance.device, vert_shader_module, nil)
+
+	fmt.printfln(" Screen Pipeline created")
 
 	return pipeline
 }

@@ -112,11 +112,11 @@ get_binding_description :: proc() -> vk.VertexInputBindingDescription {
 		inputRate = .VERTEX,
 	}
 
-	return binding_description;
+	return binding_description
 }
 
 get_attribute_descriptions :: proc() -> [2]vk.VertexInputAttributeDescription {
-	attribute_descriptions: [2]vk.VertexInputAttributeDescription =	{
+	attribute_descriptions := [2]vk.VertexInputAttributeDescription {
 		{
 			binding = 0,
 			location = 0,
@@ -132,6 +132,54 @@ get_attribute_descriptions :: proc() -> [2]vk.VertexInputAttributeDescription {
 	}
 	return attribute_descriptions
 }
+
+get_sprite_binding_description :: proc() -> vk.VertexInputBindingDescription {
+	binding_description := vk.VertexInputBindingDescription {
+		binding = 0,
+		stride = size_of(VertexBufferSprite),
+		inputRate = .VERTEX,
+	}
+
+	return binding_description
+}
+
+get_sprite_attribute_descriptions :: proc() -> [5]vk.VertexInputAttributeDescription {
+	attribute_descriptions := [5]vk.VertexInputAttributeDescription {
+		{
+			binding = 0,
+			location = 0,
+			format = .R32G32B32A32_SFLOAT,
+			offset = cast(u32) offset_of(VertexBufferSprite, color),
+		},
+		{
+			binding = 0,
+			location = 1,
+			format = .R32G32_SFLOAT,
+			offset = cast(u32) offset_of(VertexBufferSprite, uv),
+		},
+		{
+			binding = 0,
+			location = 2,
+			format = .R32G32_SFLOAT,
+			offset = cast(u32) offset_of(VertexBufferSprite, uv2),
+		},
+		{
+			binding = 0,
+			location = 3,
+			format = .R32_UINT,
+			offset = cast(u32) offset_of(VertexBufferSprite, texture_index),
+		},
+		{
+			binding = 0,
+			location = 4,
+			format = .R32_UINT,
+			offset = cast(u32) offset_of(VertexBufferSprite, sprite_index),
+		},
+	}
+	
+	return attribute_descriptions
+}
+
 
 /*
  * Return the index of the tile at (x, y)
@@ -311,7 +359,7 @@ init_vulkan :: proc() {
 	// ----- Create the swap chain -----
 	vkx.create_swap_chain()
 	
-	// ----- Create the graphics pipeline -----
+	// ----- Create the tile graphics pipeline -----
 	// Vertex input bindng and attributes
 	binding_description := get_binding_description()
 	attribute_descriptions := get_attribute_descriptions()
@@ -329,35 +377,33 @@ init_vulkan :: proc() {
 		binding_description,
 		attribute_descriptions[:],
 		push_constant_range,
-		len(Texture)
+		len(Texture),
 	)
 	
-	// BOOKMARK
-	/*
-
-	// Create the sprite pipeline
+	// ----- Create the sprite graphics pipeline -----
 	// Vertex input binding and attributes
-	VkVertexInputBindingDescription sprite_binding_description = get_sprite_binding_description();
-	size_t sprite_attribute_descriptions_count = 0;
-	VkVertexInputAttributeDescription* sprite_attribute_descriptions = get_sprite_attribute_descriptions(&sprite_attribute_descriptions_count);
+	sprite_binding_description := get_sprite_binding_description()
+	sprite_attribute_descriptions := get_sprite_attribute_descriptions()
 
 	// Push constants are the same (actually not used by the sprite shaders)
-	sprite_pipeline = vkx_create_vertex_buffer_pipeline(
+	sprite_pipeline = vkx.create_vertex_buffer_pipeline(
 		"shaders/sprite.vert.spv",
 		"shaders/sprite.frag.spv",
 		sprite_binding_description,
-		sprite_attribute_descriptions,
-		sprite_attribute_descriptions_count,
+		sprite_attribute_descriptions[:],
 		push_constant_range,
-		num_textures
-	);
-
-	// Screen pipeline is simple and has no vertex input
-	screen_pipeline = vkx_create_screen_pipeline(
+		len(Texture),
+	)
+	
+	screen_pipeline = vkx.create_screen_pipeline(
 		"shaders/screen.vert.spv",
 		"shaders/screen.frag.spv"
-	);
+	)
 
+	// BOOKMARK
+	/*
+
+	// Screen pipeline is simple and has no vertex input
 	free(sprite_attribute_descriptions);
 	free(attribute_descriptions);
 

@@ -395,53 +395,54 @@ init_vulkan :: proc() {
 		len(Texture),
 	)
 	
+	// Screen pipeline is simple and has no vertex input
 	screen_pipeline = vkx.create_screen_pipeline(
 		"shaders/screen.vert.spv",
 		"shaders/screen.frag.spv"
 	)
 
+	// ----- Create the buffers -----
+	// Vertex buffer
+	vertex_buffer := vkx.create_and_populate_buffer(
+			raw_data(vertices),
+			cast(vk.DeviceSize) (size_of(vertices[0]) * len(vertices)),
+			{.VERTEX_BUFFER},
+	)
+
+	// Index buffer
+	index_buffer := vkx.create_and_populate_buffer(
+			raw_data(vertex_indices),
+			cast(vk.DeviceSize) (size_of(vertex_indices[0]) * len(vertex_indices)),
+			{.INDEX_BUFFER},
+	)
+
+	// Sprite vertex buffer
+	sprite_vertex_buffer := vkx.create_and_populate_buffer(
+			raw_data(vertex_sprites),
+			cast(vk.DeviceSize) (size_of(vertex_sprites[0]) * len(vertex_sprites)),
+			{.VERTEX_BUFFER},
+	)
+
 	// BOOKMARK
 	/*
 
-	// Screen pipeline is simple and has no vertex input
-	free(sprite_attribute_descriptions);
-	free(attribute_descriptions);
-
-	
-	// ----- Create the buffers -----
-	// Vertex buffer
-	vertex_buffer = vkx_create_and_populate_buffer(
-			vertices, sizeof(vertices[0]) * vertices_count,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-	);
-	// Index buffer
-	index_buffer = vkx_create_and_populate_buffer(
-			vertex_indices, sizeof(vertex_indices[0]) * vertex_indices_count,
-			VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-	);
-	// Sprite vertex buffer
-	sprite_vertex_buffer = vkx_create_and_populate_buffer(
-			vertex_sprites, sizeof(vertex_sprites[0]) * vertex_sprites_count,
-			VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-	);
-
 	// ----- Load the texture images -----
-	textures = malloc(sizeof(VkxImage) * num_textures);
-	textures[0] = vkx_create_texture_image("textures/tiles.png");
-	textures[1] = vkx_create_texture_image("textures/monsters1.png");
-	textures[2] = vkx_create_texture_image("textures/monsters2.png");
-	textures[3] = vkx_create_texture_image("textures/monsters3.png");
-	textures[4] = vkx_create_texture_image("textures/monsters4.png");
+	textures = malloc(sizeof(VkxImage) * num_textures)
+	textures[0] = vkx_create_texture_image("textures/tiles.png")
+	textures[1] = vkx_create_texture_image("textures/monsters1.png")
+	textures[2] = vkx_create_texture_image("textures/monsters2.png")
+	textures[3] = vkx_create_texture_image("textures/monsters3.png")
+	textures[4] = vkx_create_texture_image("textures/monsters4.png")
 	
 	// Create the texture sampler
-	create_texture_sampler();
+	create_texture_sampler()
 
 	// ----- Create the uniform buffer -----
-	VkDeviceSize uniform_buffer_size = sizeof(UniformBufferObject);
+	VkDeviceSize uniform_buffer_size = sizeof(UniformBufferObject)
 
 	if (uniform_buffer_size > 65536) {
-		fprintf(stderr, "Tried to allocate a buffer with %zu bytes, which is greater than the maximum (65536)", uniform_buffer_size);
-		exit(1);
+		fprintf(stderr, "Tried to allocate a buffer with %zu bytes, which is greater than the maximum (65536)", uniform_buffer_size)
+		exit(1)
 	}
 
 	for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {

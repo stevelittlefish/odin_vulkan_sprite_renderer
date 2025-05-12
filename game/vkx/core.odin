@@ -1,6 +1,7 @@
 // Core shared code used throughout the VKX package
 package vkx
 
+import "base:intrinsics"
 import "core:fmt"
 import "core:os"
 import vk "vendor:vulkan"
@@ -62,6 +63,12 @@ Pipeline :: struct {
 	descriptor_set_layout: vk.DescriptorSetLayout,
 	layout: vk.PipelineLayout,
 	pipeline: vk.Pipeline,
+}
+
+// Buffer and associated memory
+Buffer :: struct {
+	buffer: vk.Buffer,
+	memory: vk.DeviceMemory,
 }
 
 // Compile time flags
@@ -215,3 +222,165 @@ find_depth_format :: proc() -> vk.Format {
 	
 	return find_supported_format(candidates, .OPTIMAL, {.DEPTH_STENCIL_ATTACHMENT})
 }
+
+find_memory_type :: proc(type_filter: u32, properties: vk.MemoryPropertyFlags) -> u32 {
+	mem_properties: vk.PhysicalDeviceMemoryProperties
+	vk.GetPhysicalDeviceMemoryProperties(instance.physical_device, &mem_properties)
+
+	for i: u32 = 0; i < mem_properties.memoryTypeCount; i += 1 {
+		if ((type_filter & (1 << i)) != 0) \
+				&& (mem_properties.memoryTypes[i].propertyFlags >= properties) {
+			return i
+		}
+	}
+	
+	fmt.eprintln("Failed to find suitable memory type!")
+	os.exit(1)
+}
+
+/*
+ * Begin a one-time command buffer
+ */
+begin_single_time_commands :: proc() -> vk.CommandBuffer {
+	alloc_info := vk.CommandBufferAllocateInfo{
+		sType = .COMMAND_BUFFER_ALLOCATE_INFO,
+		level = .PRIMARY,
+		commandPool = instance.command_pool,
+		commandBufferCount = 1,
+	}
+
+	command_buffer: vk.CommandBuffer
+	vk.AllocateCommandBuffers(instance.device, &alloc_info, &command_buffer)
+
+	begin_info := vk.CommandBufferBeginInfo {
+		sType = .COMMAND_BUFFER_BEGIN_INFO,
+		flags = {.ONE_TIME_SUBMIT},
+	}
+
+	vk.BeginCommandBuffer(command_buffer, &begin_info)
+
+	return command_buffer
+}
+
+/*
+ * End a one-time command buffer
+ */
+end_single_time_commands :: proc (command_buffer: vk.CommandBuffer) {
+	// Need address so put in local variable
+	command_buffer := command_buffer
+
+	if vk.EndCommandBuffer(command_buffer) != .SUCCESS {
+		fmt.eprintln("failed to record command buffer!")
+		os.exit(1)
+	}
+	
+	submit_info := vk.SubmitInfo {
+		sType = .SUBMIT_INFO,
+		commandBufferCount = 1,
+		pCommandBuffers = &command_buffer,
+	}
+
+	vk.QueueSubmit(instance.graphics_queue, 1, &submit_info, 0)
+	vk.QueueWaitIdle(instance.graphics_queue)
+	
+	vk.FreeCommandBuffers(instance.device, instance.command_pool, 1, &command_buffer)
+}
+/*
+ * Copy buffers - used to copy from staging buffer into vertext buffer
+ */
+copy_buffer :: proc(src_buffer: vk.Buffer, dst_buffer: vk.Buffer, size: vk.DeviceSize) {
+	command_buffer := begin_single_time_commands()
+	
+	copy_region := vk.BufferCopy{
+		size = size,
+	}
+	vk.CmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region)
+
+	end_single_time_commands(command_buffer)
+}
+
+create_buffer :: proc(
+		size: vk.DeviceSize,
+		usage: vk.BufferUsageFlags,
+		properties: vk.MemoryPropertyFlags,
+) -> Buffer {
+	buffer: Buffer
+	
+	buffer_info := vk.BufferCreateInfo {
+		sType = .BUFFER_CREATE_INFO,
+		size = size,
+		usage = usage,
+		sharingMode = .EXCLUSIVE,
+	}
+
+	if vk.CreateBuffer(instance.device, &buffer_info, nil, &buffer.buffer) != .SUCCESS {
+		fmt.eprintln("Failed to create buffer")
+		os.exit(1)
+	}
+	
+	mem_requirements: vk.MemoryRequirements
+	vk.GetBufferMemoryRequirements(instance.device, buffer.buffer, &mem_requirements)
+	
+	alloc_info := vk.MemoryAllocateInfo {
+		sType = .MEMORY_ALLOCATE_INFO,
+		allocationSize = mem_requirements.size,
+		memoryTypeIndex = find_memory_type(mem_requirements.memoryTypeBits, properties),
+	}
+
+	if vk.AllocateMemory(instance.device, &alloc_info, nil, &buffer.memory) != .SUCCESS {
+		fmt.eprintln("Failed to allocate buffer memory")
+		os.exit(1)
+	}
+
+	vk.BindBufferMemory(instance.device, buffer.buffer, buffer.memory, 0)
+
+	return buffer
+}
+
+cleanup_buffer :: proc(buffer: ^Buffer) {
+	vk.DestroyBuffer(instance.device, buffer.buffer, nil)
+	vk.FreeMemory(instance.device, buffer.memory, nil)
+
+	buffer.buffer = 0
+	buffer.memory = 0
+}
+
+/*
+ * Create a vertex buffer from the given vertices
+ *
+ * @param vertices The array of vertex data to create the buffer from
+ * @param buffer_size The size of the vertex data (i.e. sizeof(vertices[0]) * vertices_count)
+ * @param usage_flags The usage flags for the buffer (TRANSFER_DST_BIT is automatically added)
+ */
+create_and_populate_buffer :: proc(
+		vertices: rawptr,
+		buffer_size: vk.DeviceSize,
+		usage_flags: vk.BufferUsageFlags
+) -> Buffer {
+	// We should probably add a flag to decide if the buffer should be host coherent
+	// (and not use a staging buffer)
+	staging_buffer := create_buffer(
+		buffer_size,
+		{.TRANSFER_SRC},
+		{.HOST_VISIBLE, .HOST_COHERENT},
+	)
+
+	data: rawptr
+	vk.MapMemory(instance.device, staging_buffer.memory, 0, buffer_size, {}, &data)
+	intrinsics.mem_copy(data, vertices, buffer_size)
+	vk.UnmapMemory(instance.device, staging_buffer.memory)
+
+	buffer := create_buffer(
+		buffer_size,
+		usage_flags | {.TRANSFER_DST},
+		{.DEVICE_LOCAL},
+	)
+
+	// Copy the staging buffer into the vertex buffer
+	copy_buffer(staging_buffer.buffer, buffer.buffer, buffer_size)
+	
+	cleanup_buffer(&staging_buffer)
+
+	return buffer
+}
+

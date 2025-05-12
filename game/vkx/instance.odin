@@ -45,48 +45,36 @@ check_validation_layer_support :: proc() -> bool {
 	return true;
 }
 
-get_required_extensions :: proc(count: ^u32) -> []cstring {
+get_required_extensions :: proc() -> [dynamic]cstring {
 	/*
 	 * If validation layers are enabled, we need to request the VK_EXT_DEBUG_UTILS_EXTENSION_NAME extension
-	 * as well as the extensions required by GLFW.
+	 * as well as the extensions required by SDL.
 	 *
 	 * Note: calling this repeatedly could cause a memory leak as we create a new array each time
 	 * if validation layers are enabled.
 	 */
-	assert(count != nil)
-	
 	// Get the required extensions from SDL and set count to the number of extensions
-	sdl_extensions := sdl.Vulkan_GetInstanceExtensions(count);
+	sdl_extensions_count: u32
+	sdl_extensions := sdl.Vulkan_GetInstanceExtensions(&sdl_extensions_count);
 
 	if sdl_extensions == nil {
 		fmt.fprintln(os.stderr, "Failed to get required extensions from GLFW")
 		os.exit(1)
 	}
-	
-	if (!ENABLE_VALIDATION_LAYERS) {
-		// Just copy the SDL sdl_extensions
-		out := make([]cstring, count^)
-		for i := 0; i < int(count^); i += 1 {
-			out[i] = sdl_extensions[i]
-		}
-		return out
-	}
 
+	// Create the final list of extensions
+	extensions: [dynamic]cstring
+	// Copy in the SDL extensions (there must be a function to do this?)
+	for i: u32 = 0; i < sdl_extensions_count; i += 1 {
+		append(&extensions, sdl_extensions[i])
+	}
+	
 	// If validation layers are enabled, add the debug utils extension
-	out := make([]cstring, count^ + NUM_VALIDATION_LAYERS)
-	validation_layers := VALIDATION_LAYERS
-
-	// Copy the SDL extension layers
-	for i := 0; i < int(count^); i += 1 {
-		out[i] = sdl_extensions[i]
-	}
-	for j := 0; j < NUM_VALIDATION_LAYERS; j += 1 {
-		out[int(count^) + j] = validation_layers[j]
+	when ENABLE_VALIDATION_LAYERS {
+		append(&extensions, vk.EXT_DEBUG_UTILS_EXTENSION_NAME)
 	}
 	
-	count^ += NUM_VALIDATION_LAYERS
-	
-	return out
+	return extensions
 }
 
 debug_callback :: proc "system" (
@@ -203,7 +191,6 @@ init_instance :: proc(window: ^sdl.Window) {
 	// Keep a reference to the window to avoid passing it around later
 	instance.window = window
 	
-
 	// Load Vulkan
 	proc_addr := sdl.Vulkan_GetVkGetInstanceProcAddr()
 	if proc_addr == nil {
@@ -225,6 +212,14 @@ init_instance :: proc(window: ^sdl.Window) {
 		}
 	}
 	
+	// This will include the validation layer extensions
+	enabled_extensions := get_required_extensions()
+
+	fmt.println(" Requesting instance extensions:")
+	for extension in enabled_extensions {
+		fmt.printfln("  Extension: %s", extension)
+	}
+
 	app_info := vk.ApplicationInfo{
 		sType = vk.StructureType.APPLICATION_INFO,
 		pApplicationName = "Hello Triangle",
@@ -233,24 +228,13 @@ init_instance :: proc(window: ^sdl.Window) {
 		engineVersion = vk.MAKE_VERSION(1, 0, 0),
 		apiVersion = vk.API_VERSION_1_3
 	}
-	
-	num_enabled_extensions: u32
-	enabled_extensions := get_required_extensions(&num_enabled_extensions)
-	defer delete(enabled_extensions)
 
-	fmt.println(" Requesting instance extensions:")
-	for i := 0; i < int(num_enabled_extensions); i += 1 {
-		fmt.printfln("  Extension: %s", enabled_extensions[i])
-	}
-
-	instance_create_info := vk.InstanceCreateInfo{
-		sType = vk.StructureType.INSTANCE_CREATE_INFO,
+	instance_create_info := vk.InstanceCreateInfo {
+		sType            = .INSTANCE_CREATE_INFO,
 		pApplicationInfo = &app_info,
-		ppEnabledExtensionNames = &enabled_extensions[0],
-		enabledExtensionCount = num_enabled_extensions,
 	}
-	
-	if ENABLE_VALIDATION_LAYERS {
+
+	when ENABLE_VALIDATION_LAYERS {
 		validation_layers := VALIDATION_LAYERS
 
 		fmt.println(" Enabling validation layers:")
@@ -258,25 +242,23 @@ init_instance :: proc(window: ^sdl.Window) {
 			fmt.printfln("  Layer: %s", validation_layers[i])
 		}
 
-		// instance_create_info.enabledLayerCount = NUM_VALIDATION_LAYERS
-		instance_create_info.enabledLayerCount = 1
-		// instance_create_info.ppEnabledLayerNames = &validation_layers[0]
-		instance_create_info.ppEnabledLayerNames = raw_data([]cstring{"VK_LAYER_KHRONOS_validation"})
+		instance_create_info.ppEnabledLayerNames = &validation_layers[0]
+		instance_create_info.enabledLayerCount = len(validation_layers)
 		
 		debug_create_info := vk.DebugUtilsMessengerCreateInfoEXT {
 			sType = vk.StructureType.DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 			messageSeverity = {.VERBOSE, .INFO, .ERROR, .WARNING},
-			messageType = {.GENERAL, .VALIDATION, .PERFORMANCE, .DEVICE_ADDRESS_BINDING},
+			// TODO: do I want to enable the address binding messages?
+			messageType = {.GENERAL, .VALIDATION, .PERFORMANCE},
 			pfnUserCallback = debug_callback,
 		}
 
 		instance_create_info.pNext = &debug_create_info
-
-	} else {
-		instance_create_info.enabledLayerCount = 0
-		instance_create_info.pNext = nil
 	}
-	
+
+	instance_create_info.enabledExtensionCount = u32(len(enabled_extensions))
+	instance_create_info.ppEnabledExtensionNames = raw_data(enabled_extensions)
+
 	// ----- Create the Vulkan instance -----
 	if result := vk.CreateInstance(&instance_create_info, nil, &instance.instance); result != .SUCCESS {
 		fmt.fprintln(os.stderr, "failed to create instance! Result:", result);

@@ -267,13 +267,11 @@ init_instance :: proc(window: ^sdl.Window) {
 	
 	// Load procedure addresses
 	vk.load_proc_addresses_instance(instance.instance)
-
-	/*
+	
+	// TODO: remove if not needed
 	// ----- Create the debug messenger -----
+	/*
 	if (enable_validation_layers) {
-		VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info;
-		vkx_populate_debug_messenger_create_info(&debug_messenger_create_info);
-		
 		// Create the debug messenger
 		PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(vkx_instance.instance, "vkCreateDebugUtilsMessengerEXT");
 		if (func == NULL) {
@@ -357,17 +355,11 @@ init_instance :: proc(window: ^sdl.Window) {
 		fmt.printfln("  Extension: %s", create_info.ppEnabledExtensionNames[i])
 	}
 
-	/*
-	if (enable_validation_layers) {
-		create_info.enabledLayerCount = VKX_NUM_VALIDATION_LAYERS
-		create_info.ppEnabledLayerNames = validation_layers
-	} else {
-	*/
-		create_info.enabledLayerCount = 0
-	/*
+	when (ENABLE_VALIDATION_LAYERS) {
+		create_info.ppEnabledLayerNames = &validation_layers[0]
+		create_info.enabledLayerCount = len(validation_layers)
 	}
-	*/
-	
+
 	if vk.CreateDevice(instance.physical_device, &create_info, nil, &instance.device) != .SUCCESS {
 		fmt.fprintln(os.stderr, "failed to create logical device!")
 		os.exit(1)

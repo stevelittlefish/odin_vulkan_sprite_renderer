@@ -5,41 +5,47 @@ import "core:os"
 import "core:time"
 import "core:math/rand"
 import "core:slice"
+import "core:math/linalg/glsl"
 import sdl "vendor:sdl3"
 
 import vk "vendor:vulkan"
 
 import "vkx"
 
-// Simple vector types
-Vec2 :: [2]f32
-Vec3 :: [3]f32
-Vec4 :: [4]f32
-
 // Struct for vertex based geometry (i.e. the tiles)
 Vertex :: struct {
-	pos: Vec3,
-	tex_coord: Vec2,
+	pos: glsl.vec3,
+	tex_coord: glsl.vec2,
 }
 
 // This struct stores a sprite in a vertex array
 VertexBufferSprite :: struct {
 	// RGBA colour for rendering
-	color: Vec4,
+	color: glsl.vec4,
 	// Texture coordinates
-	uv: Vec2,
-	uv2: Vec2,
+	uv: glsl.vec2,
+	uv2: glsl.vec2,
 	// Texture index
 	texture_index: u32,
 	// Index into arrays in ubo
 	sprite_index: u32,
 }
 
+// Push constants used by the tilemap (default) renderer
+PushConstants :: struct {
+	// Single combined model view projection matrix
+	mvp: glsl.mat4,
+	// RGBA colour for rendering
+	color: glsl.vec4,
+	// Texture index
+	texture_index: u32,
+}
+
 // Monster struct for game logic
 Monster :: struct {
-	pos: Vec3,
-	spd: Vec2,
-	color: Vec4,
+	pos: glsl.vec3,
+	spd: glsl.vec2,
+	color: glsl.vec4,
 	texture: u32,
 }
 
@@ -91,6 +97,41 @@ vertex_sprites: [dynamic]VertexBufferSprite
 
 // Monster data
 monsters: [NUM_MONSTERS]Monster
+
+// Tile pipeline draws the tiles from the vertex data
+tile_pipeline: vkx.Pipeline
+// Screen pipeline for blitting offscreen image to the swapchain
+screen_pipeline: vkx.Pipeline
+// Sprite pipeline generates its own vertices in the shader
+sprite_pipeline: vkx.Pipeline
+
+get_binding_description :: proc() -> vk.VertexInputBindingDescription {
+	binding_description := vk.VertexInputBindingDescription{
+		binding = 0,
+		stride = size_of(Vertex),
+		inputRate = .VERTEX,
+	}
+
+	return binding_description;
+}
+
+get_attribute_descriptions :: proc() -> [2]vk.VertexInputAttributeDescription {
+	attribute_descriptions: [2]vk.VertexInputAttributeDescription =	{
+		{
+			binding = 0,
+			location = 0,
+			format = .R32G32B32_SFLOAT,
+			offset = cast(u32) offset_of(Vertex, pos),
+		},
+		{
+			binding = 0,
+			location = 1,
+			format = .R32G32_SFLOAT,
+			offset = cast(u32) offset_of(Vertex, tex_coord),
+		}
+	}
+	return attribute_descriptions
+}
 
 /*
  * Return the index of the tile at (x, y)
@@ -263,7 +304,6 @@ create_monsters :: proc() {
 	}
 }
 
-
 init_vulkan :: proc() {
 	// ----- Initialise the vulkan instance and devices -----
 	vkx.init_instance(window)
@@ -271,29 +311,30 @@ init_vulkan :: proc() {
 	// ----- Create the swap chain -----
 	vkx.create_swap_chain()
 	
-	/*
 	// ----- Create the graphics pipeline -----
 	// Vertex input bindng and attributes
-	VkVertexInputBindingDescription binding_description = get_binding_description();
-	size_t attribute_descriptions_count = 0;
-	VkVertexInputAttributeDescription* attribute_descriptions = get_attribute_descriptions(&attribute_descriptions_count);
-
+	binding_description := get_binding_description()
+	attribute_descriptions := get_attribute_descriptions()
+	
 	// Push constants for pushing matrices etc.
-	VkPushConstantRange push_constant_range = {0};
-	push_constant_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-	push_constant_range.offset = 0;
-	push_constant_range.size = sizeof(PushConstants);
+	push_constant_range := vk.PushConstantRange {
+		stageFlags = {.VERTEX, .FRAGMENT},
+		offset = 0,
+		size = size_of(PushConstants),
+	}
 
-	tile_pipeline = vkx_create_vertex_buffer_pipeline(
+	tile_pipeline = vkx.create_vertex_buffer_pipeline(
 		"shaders/tiles.vert.spv",
 		"shaders/tiles.frag.spv",
 		binding_description,
-		attribute_descriptions,
-		attribute_descriptions_count,
+		attribute_descriptions[:],
 		push_constant_range,
-		num_textures
-	);
+		len(Texture)
+	)
 	
+	// BOOKMARK
+	/*
+
 	// Create the sprite pipeline
 	// Vertex input binding and attributes
 	VkVertexInputBindingDescription sprite_binding_description = get_sprite_binding_description();

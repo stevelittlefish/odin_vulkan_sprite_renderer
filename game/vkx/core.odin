@@ -58,6 +58,12 @@ SwapChainSupportDetails :: struct {
 	present_modes: []vk.PresentModeKHR,
 }
 
+Pipeline :: struct {
+	descriptor_set_layout: vk.DescriptorSetLayout,
+	layout: vk.PipelineLayout,
+	pipeline: vk.Pipeline,
+}
+
 // Compile time flags
 ENABLE_VALIDATION_LAYERS :: #config(ENABLE_VALIDATION_LAYERS, false)
 

@@ -121,6 +121,11 @@ vertex_indices: [dynamic]u16
 // "Vertices" for the sprites
 vertex_sprites: [dynamic]VertexBufferSprite
 
+// Buffers to feed the pipelines
+vertex_buffer: vkx.Buffer
+index_buffer: vkx.Buffer
+sprite_vertex_buffer: vkx.Buffer
+
 // Monster data
 monsters: [NUM_MONSTERS]Monster
 
@@ -494,21 +499,21 @@ init_vulkan :: proc() {
 
 	// ----- Create the buffers -----
 	// Vertex buffer
-	vertex_buffer := vkx.create_and_populate_buffer(
+	vertex_buffer = vkx.create_and_populate_buffer(
 			raw_data(vertices),
 			cast(vk.DeviceSize) (size_of(vertices[0]) * len(vertices)),
 			{.VERTEX_BUFFER},
 	)
 
 	// Index buffer
-	index_buffer := vkx.create_and_populate_buffer(
+	index_buffer = vkx.create_and_populate_buffer(
 			raw_data(vertex_indices),
 			cast(vk.DeviceSize) (size_of(vertex_indices[0]) * len(vertex_indices)),
 			{.INDEX_BUFFER},
 	)
 
 	// Sprite vertex buffer
-	sprite_vertex_buffer := vkx.create_and_populate_buffer(
+	sprite_vertex_buffer = vkx.create_and_populate_buffer(
 			raw_data(vertex_sprites),
 			cast(vk.DeviceSize) (size_of(vertex_sprites[0]) * len(vertex_sprites)),
 			{.VERTEX_BUFFER},
@@ -800,100 +805,113 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 		os.exit(1)
 	}
 	
-	/*
 	// Memory barrier to transition from present source to color attachment
-	vkx_transition_image_layout(
+	vkx.transition_image_layout(
 		command_buffer,
-		vkx_swap_chain.images[image_index],
-		vkx_swap_chain.image_format,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		vkx.swap_chain.images[image_index],
+		vkx.swap_chain.image_format,
+		.PRESENT_SRC_KHR,
+		.COLOR_ATTACHMENT_OPTIMAL,
 	)
 
 	// Memory barrier to transition the offscreen image from color attachment to shader read
-	vkx_transition_image_layout(
+	vkx.transition_image_layout(
 		command_buffer,
 		offscreen_images[current_frame].image,
-		vkx_swap_chain.image_format,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+		vkx.swap_chain.image_format,
+		.SHADER_READ_ONLY_OPTIMAL,
+		.COLOR_ATTACHMENT_OPTIMAL
 	)
 
-	VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}}
+	//VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}}
+	clear_color := vk.ClearValue {
+		color = vk.ClearColorValue {
+			float32 = {0.0, 0.0, 0.0, 1.0},
+		}
+	}
 
-	VkRenderingAttachmentInfo color_attachment_info = {0}
-	color_attachment_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO
-	color_attachment_info.imageView = offscreen_images[current_frame].view
-	color_attachment_info.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL
-	color_attachment_info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR
-	color_attachment_info.storeOp = VK_ATTACHMENT_STORE_OP_STORE
-	color_attachment_info.clearValue = clear_color
+	color_attachment_info := vk.RenderingAttachmentInfo {
+		sType = .RENDERING_ATTACHMENT_INFO,
+		imageView = offscreen_images[current_frame].view,
+		imageLayout = .ATTACHMENT_OPTIMAL,
+		loadOp = .CLEAR,
+		storeOp = .STORE,
+		clearValue = clear_color,
+	}
 	
-	VkClearValue depth_clear_value = {0}
-	depth_clear_value.depthStencil.depth = 1.0f
-	depth_clear_value.depthStencil.stencil = 0
+	depth_clear_value := vk.ClearValue {
+		depthStencil = vk.ClearDepthStencilValue {
+			depth = 1.0,
+			stencil = 0,
+		},
+	}
 
-	VkRenderingAttachmentInfo depth_info = {0}
-	depth_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO
-	depth_info.imageView = depth_images[current_frame].view
-	depth_info.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-	depth_info.resolveMode = VK_RESOLVE_MODE_NONE
-	depth_info.resolveImageView = VK_NULL_HANDLE
-	depth_info.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED
-	depth_info.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR
-	depth_info.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE
-	depth_info.clearValue = depth_clear_value
+	depth_info := vk.RenderingAttachmentInfo {
+		sType = .RENDERING_ATTACHMENT_INFO,
+		imageView = depth_images[current_frame].view,
+		imageLayout = .DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+		resolveMode = {},
+		resolveImageView = 0,
+		resolveImageLayout = .UNDEFINED,
+		loadOp = .CLEAR,
+		storeOp = .DONT_CARE,
+		clearValue = depth_clear_value,
+	}
 
-	VkRenderingInfo rendering_info = {0}
-	rendering_info.sType = VK_STRUCTURE_TYPE_RENDERING_INFO
-	rendering_info.renderArea.offset.x = 0
-	rendering_info.renderArea.offset.y = 0
-	rendering_info.renderArea.extent.width = SCREEN_WIDTH
-	rendering_info.renderArea.extent.height = SCREEN_HEIGHT
-	rendering_info.layerCount = 1
-	rendering_info.colorAttachmentCount = 1
-	rendering_info.pColorAttachments = &color_attachment_info
-	rendering_info.pDepthAttachment = &depth_info
+	rendering_info := vk.RenderingInfo {
+		sType = .RENDERING_INFO,
+		renderArea = vk.Rect2D {
+			offset = vk.Offset2D {
+				x = 0,
+				y = 0,
+			},
+			extent = vk.Extent2D {
+				width = SCREEN_WIDTH,
+				height = SCREEN_HEIGHT,
+			},
+		},
+		layerCount = 1,
+		colorAttachmentCount = 1,
+		pColorAttachments = &color_attachment_info,
+		pDepthAttachment = &depth_info,
+	}
 	
 	// --- Begin dynamic rendering --------------------------------------------
-	vkCmdBeginRendering(command_buffer, &rendering_info)
+	vk.CmdBeginRendering(command_buffer, &rendering_info)
 
-	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, tile_pipeline.pipeline)
+	vk.CmdBindPipeline(command_buffer, .GRAPHICS, tile_pipeline.pipeline)
 
-	VkBuffer vertex_buffers[] = {vertex_buffer.buffer}
-	VkDeviceSize offsets[] = {0}
-	vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, offsets)
+	offset := vk.DeviceSize{}
 
-	vkCmdBindIndexBuffer(command_buffer, index_buffer.buffer, 0, VK_INDEX_TYPE_UINT16)
-	
-	VkViewport viewport = {0}
-	viewport.x = 0.0f
-	viewport.y = 0.0f
-	viewport.width = (float) SCREEN_WIDTH
-	viewport.height = (float) SCREEN_HEIGHT
-	viewport.minDepth = 0.0f
-	viewport.maxDepth = 1.0f
-	vkCmdSetViewport(command_buffer, 0, 1, &viewport)
+	vk.CmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.buffer, &offset)
 
-	VkRect2D scissor = {0}
-	scissor.offset.x = 0
-	scissor.offset.y = 0
-	scissor.extent.width = SCREEN_WIDTH
-	scissor.extent.height = SCREEN_HEIGHT
-	vkCmdSetScissor(command_buffer, 0, 1, &scissor)
+	vk.CmdBindIndexBuffer(command_buffer, index_buffer.buffer, 0, .UINT16)
+
+	viewport := vk.Viewport {
+		x = 0.0,
+		y = 0.0,
+		width = SCREEN_WIDTH,
+		height = SCREEN_HEIGHT,
+		minDepth = 0.0,
+		maxDepth = 1.0,
+	}
+	vk.CmdSetViewport(command_buffer, 0, 1, &viewport)
+
+	scissor := vk.Rect2D {
+		offset = vk.Offset2D{0, 0},
+		extent = vk.Extent2D{SCREEN_WIDTH, SCREEN_HEIGHT},
+	}
+	vk.CmdSetScissor(command_buffer, 0, 1, &scissor)
+
 	
 	// -- Render the tiles ----------------------------------------------------
 	// Bind the descriptor set to update the uniform buffer
-	vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, tile_pipeline.layout, 0, 1, &descriptor_sets[current_frame], 0, NULL)
+	vk.CmdBindDescriptorSets(command_buffer, .GRAPHICS, tile_pipeline.layout, 0, 1, &descriptor_sets[current_frame], 0, nil)
 	
-	// Update push constants with the mvp matrix
-	PushConstants push_constants = {0}
-	// Copy projection and view matrix to the constants
-	glm_mat4_mul(projection_matrix, view_matrix, push_constants.mvp)
+	// Create a model matrix for the tiles
+	tile_model_matrix := glsl.identity(glsl.mat4)
 
-	// Create a model matrix for the sprite
-	mat4 tile_model_matrix = GLM_MAT4_IDENTITY_INIT
-
+	/*
 	// Update the z-coordinate of the model matrix so that the tilemap is not
 	// infront of everything else
 	vec3 tile_translation = {
@@ -902,22 +920,24 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 		10.0f,
 	}
 	glm_translate(tile_model_matrix, tile_translation)
+	*/
 
-	// Apply model matrix to the push constants
-	glm_mat4_mul(push_constants.mvp, tile_model_matrix, push_constants.mvp)
-
-	// Set the texture index to 0
-	push_constants.texture_index = TEX_TILES
-	// Tiles always full white
-	for (size_t i=0 i<4; i++) {
-		push_constants.color[i] = 1.0f
+	// Update push constants and copy in mvp matrix
+	push_constants := PushConstants {
+		// TODO: check multiplication order
+		mvp = projection_matrix * view_matrix * tile_model_matrix,
+		// Set the texture index to 0
+		texture_index = cast(u32) Texture.TEX_TILES,
+		// Tiles always full white
+		color = {1.0, 1.0, 1.0, 1.0},
 	}
 
-	vkCmdPushConstants(command_buffer, tile_pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &push_constants)
+	vk.CmdPushConstants(command_buffer, tile_pipeline.layout, {.VERTEX, .FRAGMENT}, 0, size_of(PushConstants), &push_constants)
 
 	// Draw the triangles for the tiles
-	vkCmdDrawIndexed(command_buffer, vertex_indices_count, 1, 0, 0, 0)
+	vk.CmdDrawIndexed(command_buffer, cast(u32) len(vertex_indices), 1, 0, 0, 0)
 	
+	/*
 	// -- Render the sprites --------------------------------------------------
 	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, sprite_pipeline.pipeline)
 
@@ -928,28 +948,28 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	vkCmdDraw(command_buffer, NUM_MONSTERS * 6, 1, 0, 0)
 
 	vkCmdEndRendering(command_buffer)
-
+	*/
 	// Memory barrier to transition the offscreen image from shader read to color attachment
-	vkx_transition_image_layout(
+	vkx.transition_image_layout(
 		command_buffer,
 		offscreen_images[current_frame].image,
-		vkx_swap_chain.image_format,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		vkx.swap_chain.image_format,
+		.COLOR_ATTACHMENT_OPTIMAL,
+		.SHADER_READ_ONLY_OPTIMAL,
 	)
 
 	// -- Render the screen ---------------------------------------------------
 	// Update some parameters on the original structs
-	viewport.width = (float) vkx_swap_chain.extent.width
-	viewport.height = (float) vkx_swap_chain.extent.height
-	vkCmdSetViewport(command_buffer, 0, 1, &viewport)
+	viewport.width = cast(f32) vkx.swap_chain.extent.width
+	viewport.height = cast(f32) vkx.swap_chain.extent.height
+	vk.CmdSetViewport(command_buffer, 0, 1, &viewport)
 
-	scissor.extent = vkx_swap_chain.extent
-	vkCmdSetScissor(command_buffer, 0, 1, &scissor)
+	scissor.extent = vkx.swap_chain.extent
+	vk.CmdSetScissor(command_buffer, 0, 1, &scissor)
 
-	rendering_info.pDepthAttachment = NULL
-	color_attachment_info.imageView = vkx_swap_chain.image_views[image_index]
-	rendering_info.renderArea.extent = vkx_swap_chain.extent
+	rendering_info.pDepthAttachment = nil
+	color_attachment_info.imageView = vkx.swap_chain.image_views[image_index]
+	rendering_info.renderArea.extent = vkx.swap_chain.extent
 	
 	// NOTE: an improvement we could make here would be to add a projection
 	// matrix and feed it into the screen pipeline to ensure a consistent
@@ -958,24 +978,23 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	// pipeline, or adding that projection matrix to the ubo.
 
 	// Begin rendering again
-	vkCmdBeginRendering(command_buffer, &rendering_info)
-	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, screen_pipeline.pipeline)
-	vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, screen_pipeline.layout, 0, 1, &screen_descriptor_sets[current_frame], 0, NULL)
-	vkCmdDraw(command_buffer, 6, 1, 0, 0)
+	vk.CmdBeginRendering(command_buffer, &rendering_info)
+	vk.CmdBindPipeline(command_buffer, .GRAPHICS, screen_pipeline.pipeline)
+	vk.CmdBindDescriptorSets(command_buffer, .GRAPHICS, screen_pipeline.layout, 0, 1, &screen_descriptor_sets[current_frame], 0, nil)
+	vk.CmdDraw(command_buffer, 6, 1, 0, 0)
 
 	// --- End dynamic rendering ----------------------------------------------
-	vkCmdEndRendering(command_buffer)
+	vk.CmdEndRendering(command_buffer)
 	
 	// Memory barrier to transition the swap chain image from color attachment to present
-	vkx_transition_image_layout(
+	vkx.transition_image_layout(
 		command_buffer,
-		vkx_swap_chain.images[image_index],
-		vkx_swap_chain.image_format,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+		vkx.swap_chain.images[image_index],
+		vkx.swap_chain.image_format,
+		.COLOR_ATTACHMENT_OPTIMAL,
+		.PRESENT_SRC_KHR
 	)
 
-	*/
 	if vk.EndCommandBuffer(command_buffer) != .SUCCESS {
 		fmt.eprint("failed to record command buffer!\n")
 		os.exit(1)

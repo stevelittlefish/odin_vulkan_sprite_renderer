@@ -54,8 +54,6 @@ QueueFamilyIndices :: struct {
 
 SwapChainSupportDetails :: struct {
 	capabilities: vk.SurfaceCapabilitiesKHR,
-	// uint32_t formats_count;
-	// uint32_t present_modes_count;
 	formats: []vk.SurfaceFormatKHR,
 	present_modes: []vk.PresentModeKHR,
 }
@@ -79,6 +77,12 @@ Image :: struct {
 	view: vk.ImageView,
 }
 
+SyncObjects :: struct {
+	image_available_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
+	render_finished_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
+	in_flight_fences: [FRAMES_IN_FLIGHT]vk.Fence,
+} 
+
 
 // Compile time flags
 ENABLE_VALIDATION_LAYERS :: #config(ENABLE_VALIDATION_LAYERS, false)
@@ -97,11 +101,10 @@ DEVICE_EXTENSIONS :: [2]cstring{
 
 FRAMES_IN_FLIGHT :: 2
 
-// Main global instance
+// Global state:
 instance: Instance
-
-// Global swap chain
 swap_chain: SwapChain
+sync_objects: SyncObjects
 
 
 find_queue_families :: proc(device: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> QueueFamilyIndices {

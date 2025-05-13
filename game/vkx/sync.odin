@@ -1,0 +1,42 @@
+// Synchronisation object initialisation
+package vkx
+
+import "core:fmt"
+import "core:os"
+import vk "vendor:vulkan"
+
+
+init_sync_objects :: proc() {
+	semaphore_info := vk.SemaphoreCreateInfo {
+		sType = .SEMAPHORE_CREATE_INFO,
+	}
+
+	fence_info := vk.FenceCreateInfo {
+		sType = .FENCE_CREATE_INFO,
+		flags = {.SIGNALED}
+	}
+
+	for i := 0; i < FRAMES_IN_FLIGHT; i += 1 {
+		if vk.CreateSemaphore(instance.device, &semaphore_info, nil, &sync_objects.image_available_semaphores[i]) != .SUCCESS \
+				|| vk.CreateSemaphore(instance.device, &semaphore_info, nil, &sync_objects.render_finished_semaphores[i]) != .SUCCESS {
+			fmt.eprint("failed to create semaphores for a frame!\n")
+			os.exit(1)
+		}
+
+		if vk.CreateFence(instance.device, &fence_info, nil, &sync_objects.in_flight_fences[i]) != .SUCCESS {
+			fmt.eprint("failed to create synchronization objects for a frame!\n")
+			os.exit(1)
+		}
+	}
+}
+
+/*
+cleanup_sync_objects :: proc(void) {
+	for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {
+		vkDestroySemaphore(vkx_instance.device, vkx_sync_objects.render_finished_semaphores[i], NULL);
+		vkDestroySemaphore(vkx_instance.device, vkx_sync_objects.image_available_semaphores[i], NULL);
+		vkDestroyFence(vkx_instance.device, vkx_sync_objects.in_flight_fences[i], NULL);
+	}
+
+}
+*/

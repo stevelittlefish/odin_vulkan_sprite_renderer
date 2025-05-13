@@ -140,8 +140,14 @@ uniform_buffers_mapped: [vkx.FRAMES_IN_FLIGHT]rawptr
 projection_matrix: glsl.mat4
 view_matrix: glsl.mat4
 
+// The current time
+t: f64
 // Timestamp of the previous frame
 t_last: f64
+// Rolling FPS count
+frame_count: int
+// Timestamp of last FPS print
+last_fps_time: f64
 
 get_binding_description :: proc() -> vk.VertexInputBindingDescription {
 	binding_description := vk.VertexInputBindingDescription{
@@ -729,6 +735,47 @@ init_vulkan :: proc() {
 	fmt.println("Initiialisation complete")
 }
 
+update :: proc(dt: f64) {
+	/*
+	for (size_t i=0; i<NUM_MONSTERS; i++) {
+		if (monsters[i].spd[0] > 0 && monsters[i].pos[0] >= X_TILES) {
+			monsters[i].spd[0] *= -1;
+		}
+		else if (monsters[i].spd[0] < 0 && monsters[i].pos[0] <= 0) {
+			monsters[i].spd[0] *= -1;
+		}
+		else {
+			monsters[i].pos[0] += dt * monsters[i].spd[0];
+		}
+
+		if (monsters[i].spd[1] > 0 && monsters[i].pos[1] >= Y_TILES) {
+			monsters[i].spd[1] *= -1;
+		}
+		else if (monsters[i].spd[1] < 0 && monsters[i].pos[1] <= 0) {
+			monsters[i].spd[1] *= -1;
+		}
+		else {
+			monsters[i].pos[1] += dt * monsters[i].spd[1];
+		}
+	}
+	*/
+
+	// FPS count
+	frame_count += 1
+
+	if t - last_fps_time >= 1.0 {
+		total_time := t - last_fps_time
+		fps := int(f64(frame_count) / total_time)
+		fmt.printf("FPS: %d\n", fps)
+		fmt.printf("Frame time: %f ms\n", (total_time / f64(frame_count)) * 1000.0)
+		frame_count = 0
+		last_fps_time = t
+	}
+}
+
+draw_frame :: proc() {
+
+}
 
 main :: proc() {
 	fmt.println("Hello, Vulkan!\n")
@@ -809,7 +856,7 @@ main :: proc() {
         }
 	
 		ticks := sdl.GetTicksNS()
-		t: f64 = f64(ticks) / f64(sdl.NS_PER_SECOND)
+		t = f64(ticks) / f64(sdl.NS_PER_SECOND)
 		dt: f64 = t - t_last
 
 		if limit_fps && dt < min_frame_time {
@@ -829,11 +876,9 @@ main :: proc() {
 			dt = 0.1
 		}
 		
-		/*
-		update(dt);
+		update(dt)
 
-		draw_frame();
-		*/
+		draw_frame()
 
 		t_last = t
     }

@@ -34,7 +34,7 @@ UniformBufferObject :: struct #packed {
 
 	// Matrices for sprites
 	// This is basically the limit to fit the ubo in 64k
-	mvps: [10]glsl.mat4,
+	mvps: [1000]glsl.mat4,
 }
 
 // This struct stores a sprite in a vertex array
@@ -62,8 +62,8 @@ PushConstants :: struct {
 
 // Monster struct for game logic
 Monster :: struct {
-	pos: glsl.vec3,
-	spd: glsl.vec2,
+	pos: glsl.dvec3,
+	spd: glsl.dvec2,
 	color: glsl.vec4,
 	texture: u32,
 }
@@ -88,7 +88,7 @@ Y_TILES :: 24
 
 TOTAL_TILES :: (X_TILES * Y_TILES)
 
-NUM_MONSTERS :: 10
+NUM_MONSTERS :: 1000
 
 LIMIT_FPS :: false
 MIN_FRAME_TIME :: 1.0 / 120.0
@@ -99,7 +99,7 @@ SCREEN_HEIGHT :: Y_TILES * 32
 DEFAULT_WIDTH :: X_TILES * 32
 DEFAULT_HEIGHT :: Y_TILES * 32
 
-limit_fps :: true
+limit_fps :: false
 min_frame_time :: 1.0 / 120.0
 
 // SDL Window handle
@@ -295,8 +295,6 @@ create_tiles :: proc() {
 	num_tiles := 0
 
 	// Generate a random set of tiles
-	// TODO: is this necessary?
-	// srand(time(NULL));
 	for y := Y_TILES - 1; y >= 0; y -= 1 {
 		for x := 0; x < X_TILES; x += 1 {
 			idx := get_tile_index(x, y)
@@ -401,17 +399,17 @@ create_monsters :: proc() {
 
 	// Create the monsters and their and their "sprites"
 	for i := 0; i < NUM_MONSTERS; i += 1 {
-		monsters[i].pos[0] = rand.float32_range(0, X_TILES)
-		monsters[i].pos[1] = rand.float32_range(0, Y_TILES)
+		monsters[i].pos[0] = rand.float64_range(0, X_TILES)
+		monsters[i].pos[1] = rand.float64_range(0, Y_TILES)
 		// Half of the monsters will be in front of the tiles and half
 		// will be behind
-		monsters[i].pos[2] = rand.float32_range(1, 19)
+		monsters[i].pos[2] = rand.float64_range(1, 19)
 
-		monsters[i].spd[0] = rand.float32_range(-5, 5)
-		monsters[i].spd[1] = rand.float32_range(-5, 5)
+		monsters[i].spd[0] = rand.float64_range(-5, 5)
+		monsters[i].spd[1] = rand.float64_range(-5, 5)
 		
 		// Fade to blue as the monsters z coord puts them in the background
-		blue_fade := monsters[i].pos[2] / 20.0
+		blue_fade: f32 = cast(f32) monsters[i].pos[2] / 20.0
 		monsters[i].color[0] = 1.0 - blue_fade
 		monsters[i].color[1] = 1.0 - blue_fade
 		monsters[i].color[2] = 1.0 - blue_fade * 0.6
@@ -764,29 +762,27 @@ init_vulkan :: proc() {
 }
 
 update :: proc(dt: f64) {
-	/*
-	for (size_t i=0; i<NUM_MONSTERS; i++) {
+	for i := 0; i < NUM_MONSTERS; i += 1 {
 		if (monsters[i].spd[0] > 0 && monsters[i].pos[0] >= X_TILES) {
-			monsters[i].spd[0] *= -1;
+			monsters[i].spd[0] *= -1
 		}
 		else if (monsters[i].spd[0] < 0 && monsters[i].pos[0] <= 0) {
-			monsters[i].spd[0] *= -1;
+			monsters[i].spd[0] *= -1
 		}
 		else {
-			monsters[i].pos[0] += dt * monsters[i].spd[0];
+			monsters[i].pos[0] += dt * monsters[i].spd[0]
 		}
 
 		if (monsters[i].spd[1] > 0 && monsters[i].pos[1] >= Y_TILES) {
-			monsters[i].spd[1] *= -1;
+			monsters[i].spd[1] *= -1
 		}
 		else if (monsters[i].spd[1] < 0 && monsters[i].pos[1] <= 0) {
-			monsters[i].spd[1] *= -1;
+			monsters[i].spd[1] *= -1
 		}
 		else {
-			monsters[i].pos[1] += dt * monsters[i].spd[1];
+			monsters[i].pos[1] += dt * monsters[i].spd[1]
 		}
 	}
-	*/
 
 	// FPS count
 	frame_count += 1
@@ -917,16 +913,14 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	// Create a model matrix for the tiles
 	tile_model_matrix := glsl.identity(glsl.mat4)
 
-	/*
 	// Update the z-coordinate of the model matrix so that the tilemap is not
-	// infront of everything else
-	vec3 tile_translation = {
-		0.0f,
-		0.0f,
-		10.0f,
+	// in front of everything else
+	tile_translation: glsl.vec3 = {
+		0.0,
+		0.0,
+		10.0,
 	}
-	glm_translate(tile_model_matrix, tile_translation)
-	*/
+	tile_model_matrix = glsl.mat4Translate(tile_translation) * tile_model_matrix
 
 	// Update push constants and copy in mvp matrix
 	push_constants := PushConstants {
@@ -1036,39 +1030,36 @@ draw_frame :: proc() {
 	for i := 0; i < NUM_MONSTERS; i += 1 {
 		// TODO: check all of the matrix stuff in here!
 		
-		// Copy projection and view matrix to the uniform buffer
-		// ubo.mvps[i] = projection_matrix * view_matrix
-		ubo.mvps[i] = glsl.identity(glsl.mat4)
-
-		/*
 		// Create a model matrix for the sprite
 		model_matrix := glsl.identity(glsl.mat4)
+
 		monster_size: f32 = 2.0
-		// Centre the sprite around it's position
-		offset: glsl.vec3 = {-monster_size / 2, -monster_size / 2, 0.0}
+		// Centre the sprite around the origin
+		offset: glsl.vec3 = {-monster_size / 4, -monster_size / 4, 0.0}
 		model_matrix = glsl.mat4Translate(offset) * model_matrix
 		
-		// Move it up and down
-		translation: glsl.vec3 = {
-			monsters[i].pos[0],
-			monsters[i].pos[1] + math.sin(f32(t) * 4.0 + f32(i) * 5) * 0.2,
-			monsters[i].pos[2]
-		}
-		model_matrix = glsl.mat4Translate(translation) * model_matrix
-
-		// Monsters are 8 tiles wide
+		// Scale the monster
 		scale: glsl.vec3 = {monster_size, monster_size, 1.0}
 		// Pulsating effect
 		sin_val := math.sin(f32(t) * 2.0 + f32(i) * 5) * 0.15
 		scale[0] *= (1 + sin_val)
 		scale[1] *= (1 - sin_val)
 		model_matrix = glsl.mat4Scale(scale) * model_matrix
-		
-		// Apply model matrix to the push constants
-		ubo.mvps[i] = model_matrix * ubo.mvps[i]
-		*/
+
+		// Move it up and down relative to actual position
+		translation: glsl.vec3 = {
+			f32(monsters[i].pos[0]),
+			f32(monsters[i].pos[1] + math.sin(t * 4.0 + f64(i) * 5) * 0.2),
+			f32(monsters[i].pos[2])
+		}
+		model_matrix = glsl.mat4Translate(translation) * model_matrix
+
+		// Apply model matrix to the UBO
+		ubo.mvps[i] = projection_matrix * view_matrix * model_matrix
 	}
 	intrinsics.mem_copy(uniform_buffers_mapped[current_frame], &ubo, size_of(ubo))
+	
+	/*
 	fmt.println("\nHEX DUMP:")
 	bytes := slice.bytes_from_ptr(uniform_buffers_mapped[current_frame], size_of(ubo))
 	for i := 0; i < 265; i += 1 {
@@ -1086,8 +1077,8 @@ draw_frame :: proc() {
 			fmt.print(" ")
 		}
 	}
-
 	fmt.print("\n")
+	*/
 
 	vk.ResetFences(vkx.instance.device, 1, &vkx.sync_objects.in_flight_fences[current_frame])
 
@@ -1205,8 +1196,7 @@ main :: proc() {
 	// Orthographic projection with 0,0 in the bottom left hand corner, and each tile being 1x1
 	// NOTE: z is inverted in OpenGL so we put -1.0f as the far plane
 	// This seems to give values where 0 is closest and 20 is furthest away
-	// TODO: reset to this: projection_matrix = glsl.mat4Ortho3d(0, X_TILES, Y_TILES, 0, 22, -22)
-	projection_matrix = glsl.mat4Ortho3d(-X_TILES, X_TILES * 2, Y_TILES * 2, -Y_TILES, 22, -22)
+	projection_matrix = glsl.mat4Ortho3d(0, X_TILES, Y_TILES, 0, 22, -22)
 	
 	// ----- Main loop -----
 
@@ -1269,7 +1259,7 @@ main :: proc() {
 		t_last = t
 
 		// Clean up temporary allocator
-		// TODO: free_all(context.temp_allocator)
+		free_all(context.temp_allocator)
 		
     }
 

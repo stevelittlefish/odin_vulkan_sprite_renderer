@@ -2,7 +2,7 @@
 
 layout(binding = 0) uniform UniformBufferObject {
     float t;
-	mat4 mvps[10];
+	mat4 mvps[1000];
 } ubo;
 
 layout(location = 0) in vec4 color_in;
@@ -31,14 +31,9 @@ void main() {
 	uint idx = indices[gl_VertexIndex % 6];
 
 	vec4 position = vec4(positions[idx], 0.0, 1.0);
-
 	// Get the transform matrix from the ubo
 	mat4 mvp = ubo.mvps[sprite_idx_in];
 	// Transform the vertex position
-	mat4 identity = mat4(1.0, 0.0, 0.0, 0.0,
-			             0.0, 1.0, 0.0, 0.0,
-					     0.0, 0.0, 1.0, 0.0,
-					     0.0, 0.0, 0.0, 1.0);
 	gl_Position = mvp * position;
 
 	frag_texcoord = uv_in;
@@ -50,7 +45,6 @@ void main() {
 		frag_texcoord.y = uv2_in.y;
 	}
 	// TODO: get color from the vertex buffer
-	frag_color = vec4(mvp[0][0], mvp[1][1], mvp[2][2], 1.0);
+	frag_color = color_in;
 	frag_texture_idx = texture_idx_in;
-
 }

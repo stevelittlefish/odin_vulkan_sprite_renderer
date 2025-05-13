@@ -764,6 +764,42 @@ init_vulkan :: proc() {
 	fmt.println("Initiialisation complete")
 }
 
+cleanup_vulkan :: proc() {
+	fmt.println("Cleaning up Vulkan")
+
+	vkx.cleanup_swap_chain()
+
+	vk.DestroySampler(vkx.instance.device, texture_sampler, nil)
+
+	for i := 0; i < len(textures); i += 1 {
+		vkx.cleanup_image(&textures[i])
+	}
+
+	for i := 0 ; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+		vkx.cleanup_buffer(&uniform_buffers[i])
+	}
+	
+	vk.DestroyDescriptorPool(vkx.instance.device, descriptor_pool, nil)
+	
+
+	vkx.cleanup_pipeline(tile_pipeline)
+	vkx.cleanup_pipeline(screen_pipeline)
+	vkx.cleanup_pipeline(sprite_pipeline)
+
+	vkx.cleanup_buffer(&vertex_buffer)
+	vkx.cleanup_buffer(&index_buffer)
+	vkx.cleanup_buffer(&sprite_vertex_buffer)
+
+	vkx.cleanup_sync_objects()
+
+	for i := 0; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+		vkx.cleanup_image(&offscreen_images[i])
+		vkx.cleanup_image(&depth_images[i])
+	}
+
+	vkx.cleanup_instance()
+}
+
 update :: proc(dt: f64) {
 	for i := 0; i < NUM_MONSTERS; i += 1 {
 		if (monsters[i].spd[0] > 0 && monsters[i].pos[0] >= X_TILES) {
@@ -1255,11 +1291,9 @@ main :: proc() {
 		
     }
 
-	/*
-	vkDeviceWaitIdle(vkx_instance.device);
+	vk.DeviceWaitIdle(vkx.instance.device)
 	
-	cleanup_vulkan();
-	*/
+	cleanup_vulkan()
 
 	// Cleanup SDL
 	fmt.println("Cleaning up SDL")

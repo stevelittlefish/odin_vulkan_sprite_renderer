@@ -604,6 +604,19 @@ create_image :: proc(
 	return image
 }
 
+cleanup_image :: proc(image: ^Image) {
+	if image.view != 0 {
+		vk.DestroyImageView(instance.device, image.view, nil)
+	}
+
+	vk.DestroyImage(instance.device, image.image, nil)
+	vk.FreeMemory(instance.device, image.memory, nil)
+
+	image.image = 0
+	image.memory = 0
+	image.view = 0
+}
+
 create_texture_image :: proc(filename: cstring) -> Image {
 	width, height, channels: i32
 

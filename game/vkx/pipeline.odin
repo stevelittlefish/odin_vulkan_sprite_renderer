@@ -418,3 +418,9 @@ create_screen_pipeline :: proc(vert_shader_path: string, frag_shader_path: strin
 
 	return pipeline
 }
+
+cleanup_pipeline :: proc(pipeline: Pipeline) {
+	vk.DestroyDescriptorSetLayout(instance.device, pipeline.descriptor_set_layout, nil)
+	vk.DestroyPipeline(instance.device, pipeline.pipeline, nil)
+	vk.DestroyPipelineLayout(instance.device, pipeline.layout, nil)
+}

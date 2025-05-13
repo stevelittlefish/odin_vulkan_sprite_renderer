@@ -30,13 +30,10 @@ init_sync_objects :: proc() {
 	}
 }
 
-/*
-cleanup_sync_objects :: proc(void) {
-	for (size_t i = 0; i < VKX_FRAMES_IN_FLIGHT; i++) {
-		vkDestroySemaphore(vkx_instance.device, vkx_sync_objects.render_finished_semaphores[i], NULL);
-		vkDestroySemaphore(vkx_instance.device, vkx_sync_objects.image_available_semaphores[i], NULL);
-		vkDestroyFence(vkx_instance.device, vkx_sync_objects.in_flight_fences[i], NULL);
+cleanup_sync_objects :: proc() {
+	for i := 0; i < FRAMES_IN_FLIGHT; i += 1 {
+		vk.DestroySemaphore(instance.device, sync_objects.render_finished_semaphores[i], nil)
+		vk.DestroySemaphore(instance.device, sync_objects.image_available_semaphores[i], nil)
+		vk.DestroyFence(instance.device, sync_objects.in_flight_fences[i], nil)
 	}
-
 }
-*/

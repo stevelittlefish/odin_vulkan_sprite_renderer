@@ -261,8 +261,8 @@ init_instance :: proc(window: ^sdl.Window) {
 
 	// ----- Create the Vulkan instance -----
 	if result := vk.CreateInstance(&instance_create_info, nil, &instance.instance); result != .SUCCESS {
-		fmt.fprintln(os.stderr, "failed to create instance! Result:", result);
-		os.exit(1);
+		fmt.fprintln(os.stderr, "failed to create instance! Result:", result)
+		os.exit(1)
 	}
 	
 	// Load procedure addresses
@@ -394,4 +394,25 @@ init_instance :: proc(window: ^sdl.Window) {
 		fmt.fprintln(os.stderr, "failed to allocate command buffers!")
 		os.exit(1)
 	}
+}
+
+cleanup_instance :: proc() {
+	fmt.println("Cleaning up Vulkan Instance (VKX)")
+	
+	vk.DestroyCommandPool(instance.device, instance.command_pool, nil)
+
+	vk.DestroyDevice(instance.device, nil)
+	
+	/*
+	if (enable_validation_layers) {
+		PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance.instance, "vkDestroyDebugUtilsMessengerEXT")
+		if (func != nil) {
+			func(instance.instance, instance.debug_messenger, nil)
+		}
+	}
+	*/
+
+	vk.DestroySurfaceKHR(instance.instance, instance.surface, nil)
+
+	vk.DestroyInstance(instance.instance, nil)
 }

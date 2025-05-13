@@ -133,6 +133,10 @@ depth_images: [vkx.FRAMES_IN_FLIGHT]vkx.Image
 uniform_buffers: [vkx.FRAMES_IN_FLIGHT]vkx.Buffer
 uniform_buffers_mapped: [vkx.FRAMES_IN_FLIGHT]rawptr
 
+// Matrices for rendering
+projection_matrix: glsl.mat4
+view_matrix: glsl.mat4
+
 get_binding_description :: proc() -> vk.VertexInputBindingDescription {
 	binding_description := vk.VertexInputBindingDescription{
 		binding = 0,
@@ -752,35 +756,36 @@ main :: proc() {
 	// Initialise Vulkan
 	init_vulkan()
 
-	/*
 	// Make the window visible
-	SDL_ShowWindow(window);
+	sdl.ShowWindow(window)
 
 	// Initialise matrices
 	// At the moment there is no camera - just use the identity matrix for view
-	glm_mat4_identity(view_matrix);
+	view_matrix = glsl.identity(glsl.mat4)
 
 	// Projection matrix
 	// Orthographic projection with 0,0 in the bottom left hand corner, and each tile being 1x1
 	// NOTE: z is inverted in OpenGL so we put -1.0f as the far plane
 	// This seems to give values where 0 is closest and 20 is furthest away
-	glm_ortho(0.0f, (float) X_TILES, (float) Y_TILES, 0.0f, 22.0f, -22.0f, projection_matrix);
+	projection_matrix = glsl.mat4Ortho3d(0, X_TILES, Y_TILES, 0, 22, -22)
 	
 	// ----- Main loop -----
 
-    bool running = true;
-    SDL_Event event;
-    while (running) {
+    running := true
+
+    event: sdl.Event
+
+    for running {
         // Poll for events
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                running = false;
-            }
-			else if (event.type == SDL_EVENT_KEY_DOWN) {
-				if (event.key.key == SDLK_ESCAPE || event.key.key == SDLK_Q) {
-					printf("Quitting...\n");
-					running = false;
+        for sdl.PollEvent(&event) == true {
+            if event.type == sdl.EventType.QUIT {
+                running = false
+            } else if event.type == sdl.EventType.KEY_DOWN {
+				if event.key.key == sdl.K_ESCAPE || event.key.key == sdl.K_Q {
+					fmt.println("Quitting...")
+					running = false
 				}
+				/*
 				else if (event.key.key == SDLK_F11) {
 					// Toggle fullscreen
 					if (fullscreen) {
@@ -793,9 +798,11 @@ main :: proc() {
 					}
 					framebuffer_resized = true;
 				}
+				*/
 			}
         }
-
+	
+		/*
 		uint64_t ticks = SDL_GetTicksNS();
 		t = SDL_NS_TO_SECONDS((double) ticks);
 		double dt = t - t_last;
@@ -821,8 +828,10 @@ main :: proc() {
 		draw_frame();
 
 		t_last = t;
+		*/
     }
 
+	/*
 	vkDeviceWaitIdle(vkx_instance.device);
 	
 	cleanup_vulkan();

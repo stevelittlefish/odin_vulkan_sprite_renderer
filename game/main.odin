@@ -89,6 +89,9 @@ SCREEN_HEIGHT :: Y_TILES * 32
 DEFAULT_WIDTH :: X_TILES * 32
 DEFAULT_HEIGHT :: Y_TILES * 32
 
+limit_fps :: true
+min_frame_time :: 1.0 / 120.0
+
 // SDL Window handle
 window: ^sdl.Window = nil
 
@@ -136,6 +139,9 @@ uniform_buffers_mapped: [vkx.FRAMES_IN_FLIGHT]rawptr
 // Matrices for rendering
 projection_matrix: glsl.mat4
 view_matrix: glsl.mat4
+
+// Timestamp of the previous frame
+t_last: f64
 
 get_binding_description :: proc() -> vk.VertexInputBindingDescription {
 	binding_description := vk.VertexInputBindingDescription{
@@ -802,33 +808,34 @@ main :: proc() {
 			}
         }
 	
-		/*
-		uint64_t ticks = SDL_GetTicksNS();
-		t = SDL_NS_TO_SECONDS((double) ticks);
-		double dt = t - t_last;
+		ticks := sdl.GetTicksNS()
+		t: f64 = f64(ticks) / f64(sdl.NS_PER_SECOND)
+		dt: f64 = t - t_last
 
-		if (limit_fps && dt < min_frame_time) {
-			int dt_ms = (int) (1000.0 * dt);
-			int sleep_time = (int) (1000.0 * min_frame_time) - dt_ms;
-			if (sleep_time <= 0) {
-				sleep_time = 1;
+		if limit_fps && dt < min_frame_time {
+			dt_ms := 1000.0 * dt
+			sleep_time_f: f64 = 1000.0 * f64(min_frame_time) - dt_ms
+			if (sleep_time_f <= 1) {
+				sleep_time_f = 1
 			}
-			SDL_Delay(sleep_time);
-			ticks = SDL_GetTicksNS();
-			t = SDL_NS_TO_SECONDS((double) ticks);
-			dt = t - t_last;
-		}
-		else if (dt > 0.1) {
-			// Clamp the delta time to 0.1 seconds
-			dt = 0.1;
-		}
+			sleep_time := u32(sleep_time_f)
+			sdl.Delay(sleep_time)
+			ticks = sdl.GetTicksNS()
+			t: f64 = f64(ticks) / f64(sdl.NS_PER_SECOND)
+			dt = t - t_last
 
+		} else if dt > 0.1 {
+			// Clamp the delta time to 0.1 seconds
+			dt = 0.1
+		}
+		
+		/*
 		update(dt);
 
 		draw_frame();
-
-		t_last = t;
 		*/
+
+		t_last = t
     }
 
 	/*

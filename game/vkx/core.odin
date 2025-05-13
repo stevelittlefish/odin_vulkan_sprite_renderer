@@ -6,6 +6,7 @@ import "core:fmt"
 import "core:os"
 import vk "vendor:vulkan"
 import sdl "vendor:sdl3"
+import stbi "vendor:stb/image"
 
 // Main VKX Instance struct
 Instance :: struct {
@@ -70,6 +71,14 @@ Buffer :: struct {
 	buffer: vk.Buffer,
 	memory: vk.DeviceMemory,
 }
+
+// An image with corresponding view and memory
+Image :: struct {
+	image: vk.Image,
+	memory: vk.DeviceMemory,
+	view: vk.ImageView,
+}
+
 
 // Compile time flags
 ENABLE_VALIDATION_LAYERS :: #config(ENABLE_VALIDATION_LAYERS, false)
@@ -285,6 +294,130 @@ end_single_time_commands :: proc (command_buffer: vk.CommandBuffer) {
 	
 	vk.FreeCommandBuffers(instance.device, instance.command_pool, 1, &command_buffer)
 }
+
+/*
+ * Check if the format has a stencil component
+ */
+has_stencil_component :: proc(format: vk.Format) -> bool {
+	#partial switch (format) {
+		case .D32_SFLOAT_S8_UINT:
+		case .D24_UNORM_S8_UINT:
+			return true
+	}
+
+	return false
+}
+
+transition_image_layout :: proc(
+		command_buffer: vk.CommandBuffer, image: vk.Image, format: vk.Format,
+		old_layout: vk.ImageLayout, new_layout: vk.ImageLayout,
+) {
+	barrier := vk.ImageMemoryBarrier2 {
+		sType = .IMAGE_MEMORY_BARRIER_2,
+		oldLayout = old_layout,
+		newLayout = new_layout,
+		srcQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
+		dstQueueFamilyIndex = vk.QUEUE_FAMILY_IGNORED,
+		image = image,
+		subresourceRange = vk.ImageSubresourceRange {
+			baseMipLevel = 0,
+			levelCount = 1,
+			baseArrayLayer = 0,
+			layerCount = 1,
+		},
+	}
+
+	if new_layout == vk.ImageLayout.DEPTH_STENCIL_ATTACHMENT_OPTIMAL {
+		if has_stencil_component(format) {
+			barrier.subresourceRange.aspectMask = {.DEPTH, .STENCIL}
+		} else {
+			barrier.subresourceRange.aspectMask = {.DEPTH}
+		}
+	} else {
+		barrier.subresourceRange.aspectMask = {.COLOR}
+	}
+
+	if (old_layout == .UNDEFINED
+			&& new_layout == .TRANSFER_DST_OPTIMAL) {
+		barrier.srcStageMask = {.TOP_OF_PIPE}
+		barrier.srcAccessMask = {}
+		barrier.dstStageMask = {.TRANSFER}
+		barrier.dstAccessMask = {.TRANSFER_WRITE}
+	} else if (old_layout == .UNDEFINED
+			&& new_layout == .SHADER_READ_ONLY_OPTIMAL) {
+		barrier.srcStageMask = {.TOP_OF_PIPE}
+		barrier.srcAccessMask = {}
+		barrier.dstStageMask = {.TRANSFER}
+		barrier.dstAccessMask = {.TRANSFER_WRITE}
+	} else if (old_layout == .UNDEFINED
+		   	&& new_layout == .DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+		barrier.srcAccessMask = {}
+		barrier.srcStageMask = {.TOP_OF_PIPE}
+		barrier.dstAccessMask = {.DEPTH_STENCIL_ATTACHMENT_READ, .DEPTH_STENCIL_ATTACHMENT_WRITE}
+		barrier.dstStageMask = {.EARLY_FRAGMENT_TESTS}
+	} else if (old_layout == .TRANSFER_DST_OPTIMAL
+			&& new_layout == .SHADER_READ_ONLY_OPTIMAL) {
+		barrier.srcAccessMask = {.TRANSFER_WRITE}
+		barrier.srcStageMask = {.TRANSFER}
+		barrier.dstAccessMask = {.SHADER_READ}
+		barrier.dstStageMask = {.FRAGMENT_SHADER}
+	} else if (old_layout == .PRESENT_SRC_KHR
+			&& new_layout == .COLOR_ATTACHMENT_OPTIMAL) {
+		barrier.srcStageMask = {.TOP_OF_PIPE}
+		barrier.srcAccessMask = {}
+		barrier.dstStageMask = {.COLOR_ATTACHMENT_OUTPUT}
+		barrier.dstAccessMask = {.COLOR_ATTACHMENT_WRITE}
+	} else if (old_layout == .COLOR_ATTACHMENT_OPTIMAL
+			&& new_layout == .PRESENT_SRC_KHR) {
+		barrier.srcStageMask = {.COLOR_ATTACHMENT_OUTPUT}
+		barrier.srcAccessMask = {.COLOR_ATTACHMENT_WRITE}
+		barrier.dstStageMask = {.BOTTOM_OF_PIPE}
+		barrier.dstAccessMask = {.MEMORY_READ}
+	} else if (old_layout == .COLOR_ATTACHMENT_OPTIMAL
+			&& new_layout == .SHADER_READ_ONLY_OPTIMAL) {
+		barrier.srcStageMask = {.TOP_OF_PIPE}
+		barrier.srcAccessMask = {}
+		barrier.dstStageMask = {.COLOR_ATTACHMENT_OUTPUT}
+		barrier.dstAccessMask = {.MEMORY_READ}
+	} else if (old_layout == .SHADER_READ_ONLY_OPTIMAL
+			&& new_layout == .COLOR_ATTACHMENT_OPTIMAL) {
+		barrier.srcStageMask = {.FRAGMENT_SHADER}
+		barrier.srcAccessMask = {.MEMORY_READ}
+		barrier.dstStageMask = {.COLOR_ATTACHMENT_OUTPUT}
+		barrier.dstAccessMask = {.COLOR_ATTACHMENT_WRITE}
+	} else {
+		fmt.eprintf("Unsupported layout transition from %d to %d\n", old_layout, new_layout)
+		os.exit(1)
+	}
+
+	dependency_info := vk.DependencyInfo {
+		sType = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers = &barrier,
+	}
+
+	vk.CmdPipelineBarrier2(
+		command_buffer,
+		&dependency_info
+	)
+}
+
+transition_image_layout_tmp_buffer :: proc (
+		image: vk.Image, format: vk.Format, old_layout: vk.ImageLayout, new_layout: vk.ImageLayout
+) {
+	command_buffer := begin_single_time_commands()
+	
+	transition_image_layout(
+		command_buffer,
+		image,
+		format,
+		old_layout,
+		new_layout
+	)
+	
+	end_single_time_commands(command_buffer)
+}
+
 /*
  * Copy buffers - used to copy from staging buffer into vertext buffer
  */
@@ -297,6 +430,43 @@ copy_buffer :: proc(src_buffer: vk.Buffer, dst_buffer: vk.Buffer, size: vk.Devic
 	vk.CmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region)
 
 	end_single_time_commands(command_buffer)
+}
+
+copy_buffer_to_image :: proc(buffer: vk.Buffer, image: vk.Image, width: u32, height: u32) {
+	command_buffer := begin_single_time_commands()
+
+	region := vk.BufferImageCopy {
+		bufferOffset = 0,
+		bufferRowLength = 0,
+		bufferImageHeight = 0,
+		imageSubresource = vk.ImageSubresourceLayers {
+			aspectMask = {.COLOR},
+			mipLevel = 0,
+			baseArrayLayer = 0,
+			layerCount = 1,
+		},
+		imageOffset = vk.Offset3D {
+			x = 0,
+			y = 0,
+			z = 0,
+		},
+		imageExtent = vk.Extent3D {
+			width = width,
+			height = height,
+			depth = 1,
+		}
+	}
+
+	vk.CmdCopyBufferToImage(
+		command_buffer,
+		buffer,
+		image,
+		.TRANSFER_DST_OPTIMAL,
+		1,
+		&region
+	)
+
+    end_single_time_commands(command_buffer)
 }
 
 create_buffer :: proc(
@@ -384,3 +554,104 @@ create_and_populate_buffer :: proc(
 	return buffer
 }
 
+create_image :: proc(
+		width: u32, height: u32, format:vk.Format, tiling: vk.ImageTiling,
+		usage: vk.ImageUsageFlags, properties: vk.MemoryPropertyFlags
+) -> Image {
+	image_info := vk.ImageCreateInfo {
+		sType = .IMAGE_CREATE_INFO,
+		imageType = .D2,
+		extent = vk.Extent3D {
+			width = width,
+			height = height,
+			depth = 1,
+		},
+		mipLevels = 1,
+		arrayLayers = 1,
+		format = format,
+		tiling = tiling,
+		initialLayout = .UNDEFINED,
+		usage = usage,
+		samples = {._1},
+		sharingMode = .EXCLUSIVE,
+	}
+	
+	image: Image
+
+	if vk.CreateImage(instance.device, &image_info, nil, &image.image) != .SUCCESS {
+		fmt.eprintf("Failed to create image!\n")
+		os.exit(1)
+	}
+	
+	mem_requirements: vk.MemoryRequirements
+	vk.GetImageMemoryRequirements(instance.device, image.image, &mem_requirements)
+	
+	alloc_info := vk.MemoryAllocateInfo {
+		sType = .MEMORY_ALLOCATE_INFO,
+		allocationSize = mem_requirements.size,
+		memoryTypeIndex = find_memory_type(mem_requirements.memoryTypeBits, properties),
+	}
+
+	if vk.AllocateMemory(instance.device, &alloc_info, nil, &image.memory) != .SUCCESS {
+		fmt.eprintf("Failed to allocate image memory!\n")
+	}
+
+	vk.BindImageMemory(instance.device, image.image, image.memory, 0)
+
+	return image
+}
+
+create_texture_image :: proc(filename: cstring) -> Image {
+	width, height, channels: i32
+
+	fmt.printf("Loading texture image %s\n", filename)
+	
+	// 4 channels: RGBA
+	pixels := stbi.load(filename, &width, &height, &channels, 4)
+	if pixels == nil {
+		fmt.eprintf("failed to load texture image!\n")
+		os.exit(1)
+	}
+
+	image_size := cast(vk.DeviceSize) (width * height * 4)
+
+	// Create a buffer and load the image into it
+	staging_buffer := create_buffer(
+		image_size,
+		{.TRANSFER_SRC},
+		{.HOST_VISIBLE, .HOST_COHERENT},
+	)
+	
+	data: rawptr
+	vk.MapMemory(instance.device, staging_buffer.memory, 0, image_size, {}, &data)
+	intrinsics.mem_copy(data, pixels, image_size)
+	vk.UnmapMemory(instance.device, staging_buffer.memory)
+
+	stbi.image_free(pixels)
+
+	// Create the image
+	image := create_image(
+		cast(u32) width,
+		cast(u32) height,
+		.R8G8B8A8_SRGB,
+		.OPTIMAL,
+		{.TRANSFER_DST, .SAMPLED},
+		{.DEVICE_LOCAL},
+	)
+
+	// Transition the image layout to transfer destination
+	transition_image_layout_tmp_buffer(image.image, .R8G8B8A8_SRGB, .UNDEFINED, .TRANSFER_DST_OPTIMAL)
+	
+	copy_buffer_to_image(staging_buffer.buffer, image.image, cast(u32) width, cast(u32) height)
+
+	// Transition the image layout to shader read
+	transition_image_layout_tmp_buffer(image.image, .R8G8B8A8_SRGB, .TRANSFER_DST_OPTIMAL, .SHADER_READ_ONLY_OPTIMAL)
+	
+	// Clean up the staging buffer
+	cleanup_buffer(&staging_buffer)
+
+	// Create the image view
+	image.view = create_image_view(image.image, .R8G8B8A8_SRGB, {.COLOR})
+
+	return image
+}

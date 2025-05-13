@@ -105,6 +105,8 @@ screen_pipeline: vkx.Pipeline
 // Sprite pipeline generates its own vertices in the shader
 sprite_pipeline: vkx.Pipeline
 
+textures: [dynamic]vkx.Image
+
 get_binding_description :: proc() -> vk.VertexInputBindingDescription {
 	binding_description := vk.VertexInputBindingDescription{
 		binding = 0,
@@ -422,17 +424,17 @@ init_vulkan :: proc() {
 			cast(vk.DeviceSize) (size_of(vertex_sprites[0]) * len(vertex_sprites)),
 			{.VERTEX_BUFFER},
 	)
+	
+	// ----- Load the texture images -----
+	// These must be loaded in the same order as the Texture enum
+	append(&textures, vkx.create_texture_image("textures/tiles.png"))
+	append(&textures, vkx.create_texture_image("textures/monsters1.png"))
+	append(&textures, vkx.create_texture_image("textures/monsters2.png"))
+	append(&textures, vkx.create_texture_image("textures/monsters3.png"))
+	append(&textures, vkx.create_texture_image("textures/monsters4.png"))
 
 	// BOOKMARK
 	/*
-
-	// ----- Load the texture images -----
-	textures = malloc(sizeof(VkxImage) * num_textures)
-	textures[0] = vkx_create_texture_image("textures/tiles.png")
-	textures[1] = vkx_create_texture_image("textures/monsters1.png")
-	textures[2] = vkx_create_texture_image("textures/monsters2.png")
-	textures[3] = vkx_create_texture_image("textures/monsters3.png")
-	textures[4] = vkx_create_texture_image("textures/monsters4.png")
 	
 	// Create the texture sampler
 	create_texture_sampler()

@@ -177,6 +177,9 @@ SUBOPTIMAL_SWAPCHAIN_THRESHOLD :: 10
 // Used to recreate swap chain on resize
 framebuffer_resized := false
 
+// Are we running in fullscreen mode?
+fullscreen := false
+
 get_binding_description :: proc() -> vk.VertexInputBindingDescription {
 	binding_description := vk.VertexInputBindingDescription{
 		binding = 0,
@@ -825,7 +828,6 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 		.COLOR_ATTACHMENT_OPTIMAL
 	)
 
-	//VkClearValue clear_color = {{{0.0f, 0.0f, 0.0f, 1.0f}}}
 	clear_color := vk.ClearValue {
 		color = vk.ClearColorValue {
 			float32 = {0.0, 0.0, 0.0, 1.0},
@@ -1154,8 +1156,6 @@ draw_frame :: proc() {
 main :: proc() {
 	fmt.println("Hello, Vulkan!\n")
 
-	// init_global_temporary_allocator(1024 * 8)
-
 	// Initialise SDL
 	if !sdl.Init(sdl.INIT_VIDEO) {
 		fmt.printf("SLD initialisation failed: %s\n", sdl.GetError())
@@ -1214,20 +1214,12 @@ main :: proc() {
 					fmt.println("Quitting...")
 					running = false
 				}
-				/*
-				else if (event.key.key == SDLK_F11) {
+				else if (event.key.key == sdl.K_F11) {
 					// Toggle fullscreen
-					if (fullscreen) {
-						SDL_SetWindowFullscreen(window, 0);
-						fullscreen = false;
-					}
-					else {
-						SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN);
-						fullscreen = true;
-					}
-					framebuffer_resized = true;
+					fullscreen = !fullscreen
+					sdl.SetWindowFullscreen(window, fullscreen)
+					framebuffer_resized = true
 				}
-				*/
 			}
         }
 	

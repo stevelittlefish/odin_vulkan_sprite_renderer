@@ -211,3 +211,31 @@ create_swap_chain :: proc() {
 
 	fmt.printfln(" Swap chain created with format: %d", swap_chain.image_format)
 }
+
+cleanup_swap_chain :: proc() {
+	fmt.printf("Cleaning up swap chain\n");
+	
+	for i := 0; i < len(swap_chain.images); i += 1 {
+		vk.DestroyImageView(instance.device, swap_chain.image_views[i], nil)
+	}
+	
+	// TODO: is this free needed?
+	delete(swap_chain.image_views)
+	swap_chain.image_views = nil
+
+	vk.DestroySwapchainKHR(instance.device, swap_chain.swap_chain, nil);
+}
+
+recreate_swap_chain :: proc() {
+	// TODO: fix the memory leak!
+	fmt.println("WARNING: memory leak in vkx.recreate_swap_chain")
+
+	width, height: i32
+	sdl.GetWindowSize(instance.window, &width, &height)
+
+	vk.DeviceWaitIdle(instance.device)
+
+	cleanup_swap_chain()
+
+	create_swap_chain()
+}

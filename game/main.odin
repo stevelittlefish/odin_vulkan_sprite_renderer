@@ -23,12 +23,18 @@ Vertex :: struct {
 }
 
 // Struct for the uniform buffer object for all shaders
-UniformBufferObject :: struct {
+UniformBufferObject :: struct #packed {
 	// Time to use in shaders
 	t: f32,
+	
+	// Alignment issues...
+	_: f32,
+	_: f32,
+	_: f32,
+
 	// Matrices for sprites
 	// This is basically the limit to fit the ubo in 64k
-	mvps: [1000]glsl.mat4,
+	mvps: [10]glsl.mat4,
 }
 
 // This struct stores a sprite in a vertex array
@@ -82,7 +88,7 @@ Y_TILES :: 24
 
 TOTAL_TILES :: (X_TILES * Y_TILES)
 
-NUM_MONSTERS :: 1000
+NUM_MONSTERS :: 10
 
 LIMIT_FPS :: false
 MIN_FRAME_TIME :: 1.0 / 120.0
@@ -924,7 +930,6 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 
 	// Update push constants and copy in mvp matrix
 	push_constants := PushConstants {
-		// TODO: check multiplication order
 		mvp = projection_matrix * view_matrix * tile_model_matrix,
 		// Set the texture index to 0
 		texture_index = cast(u32) Texture.TEX_TILES,
@@ -937,18 +942,16 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	// Draw the triangles for the tiles
 	vk.CmdDrawIndexed(command_buffer, cast(u32) len(vertex_indices), 1, 0, 0, 0)
 	
-	/*
 	// -- Render the sprites --------------------------------------------------
-	vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, sprite_pipeline.pipeline)
+	vk.CmdBindPipeline(command_buffer, .GRAPHICS, sprite_pipeline.pipeline)
 
-	VkBuffer sprite_vertex_buffers[] = {sprite_vertex_buffer.buffer}
-	VkDeviceSize sprite_offsets[] = {0}
-	vkCmdBindVertexBuffers(command_buffer, 0, 1, sprite_vertex_buffers, sprite_offsets)
+	sprite_offset := vk.DeviceSize{}
+	vk.CmdBindVertexBuffers(command_buffer, 0, 1, &sprite_vertex_buffer.buffer, &sprite_offset)
 
-	vkCmdDraw(command_buffer, NUM_MONSTERS * 6, 1, 0, 0)
+	vk.CmdDraw(command_buffer, NUM_MONSTERS * 6, 1, 0, 0)
 
-	vkCmdEndRendering(command_buffer)
-	*/
+	vk.CmdEndRendering(command_buffer)
+
 	// Memory barrier to transition the offscreen image from shader read to color attachment
 	vkx.transition_image_layout(
 		command_buffer,
@@ -1028,13 +1031,14 @@ draw_frame :: proc() {
 	ubo := UniformBufferObject {
 		t = f32(t)
 	}
-
+	
 	// Update monster transforms
 	for i := 0; i < NUM_MONSTERS; i += 1 {
 		// TODO: check all of the matrix stuff in here!
 		
 		// Copy projection and view matrix to the uniform buffer
-		ubo.mvps[i] = projection_matrix * view_matrix
+		// ubo.mvps[i] = projection_matrix * view_matrix
+		ubo.mvps[i] = glsl.identity(glsl.mat4)
 
 		/*
 		// Create a model matrix for the sprite
@@ -1064,8 +1068,26 @@ draw_frame :: proc() {
 		ubo.mvps[i] = model_matrix * ubo.mvps[i]
 		*/
 	}
-	
-	intrinsics.mem_copy(uniform_buffers_mapped[current_frame], &ubo, size_of(ubo));
+	intrinsics.mem_copy(uniform_buffers_mapped[current_frame], &ubo, size_of(ubo))
+	fmt.println("\nHEX DUMP:")
+	bytes := slice.bytes_from_ptr(uniform_buffers_mapped[current_frame], size_of(ubo))
+	for i := 0; i < 265; i += 1 {
+		if i >= len(bytes) {
+			fmt.printfln("Broke at %d", i)
+			break
+		}
+
+		v := bytes[i]
+		fmt.printf("%02X", v)
+
+		if i % 16 == 15 {
+			fmt.print("\n")
+		} else if i % 4 == 3 {
+			fmt.print(" ")
+		}
+	}
+
+	fmt.print("\n")
 
 	vk.ResetFences(vkx.instance.device, 1, &vkx.sync_objects.in_flight_fences[current_frame])
 
@@ -1183,7 +1205,8 @@ main :: proc() {
 	// Orthographic projection with 0,0 in the bottom left hand corner, and each tile being 1x1
 	// NOTE: z is inverted in OpenGL so we put -1.0f as the far plane
 	// This seems to give values where 0 is closest and 20 is furthest away
-	projection_matrix = glsl.mat4Ortho3d(0, X_TILES, Y_TILES, 0, 22, -22)
+	// TODO: reset to this: projection_matrix = glsl.mat4Ortho3d(0, X_TILES, Y_TILES, 0, 22, -22)
+	projection_matrix = glsl.mat4Ortho3d(-X_TILES, X_TILES * 2, Y_TILES * 2, -Y_TILES, 22, -22)
 	
 	// ----- Main loop -----
 

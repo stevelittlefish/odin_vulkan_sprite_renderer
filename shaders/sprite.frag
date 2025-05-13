@@ -14,9 +14,13 @@ layout(location = 2) flat in uint frag_texture_index;
 layout(location = 0) out vec4 out_color;
 
 void main() {
+	/*
 	vec4 tex_color = texture(texSampler[nonuniformEXT(frag_texture_index)], frag_tex_coord);
 	if (tex_color.a < 0.5) {
 		discard;
 	}
 	out_color = tex_color * frag_color;
+	*/
+	// out_color = vec4(1.0, 1.0, 1.0, 1.0);
+	out_color = frag_color;
 }

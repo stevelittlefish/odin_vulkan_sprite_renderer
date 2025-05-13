@@ -157,7 +157,8 @@ create_vertex_buffer_pipeline :: proc(
 		rasterizerDiscardEnable = false,
 		polygonMode = .FILL,
 		lineWidth = 1.0,
-		cullMode = {.BACK},
+		// TODO: cullMode = {.BACK},
+		cullMode = {},
 		frontFace = .COUNTER_CLOCKWISE,
 		depthBiasEnable = false,
 	}

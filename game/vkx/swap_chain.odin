@@ -21,15 +21,13 @@ choose_swap_extent :: proc(window: ^sdl.Window, capabilities: ^vk.SurfaceCapabil
 		// Clamp the width and height to the min and max extents
 		if (actual_extent.width < capabilities.minImageExtent.width) {
 			actual_extent.width = capabilities.minImageExtent.width
-		}
-		else if (actual_extent.width > capabilities.maxImageExtent.width) {
+		} else if (actual_extent.width > capabilities.maxImageExtent.width) {
 			actual_extent.width = capabilities.maxImageExtent.width
 		}
 
 		if (actual_extent.height < capabilities.minImageExtent.height) {
 			actual_extent.height = capabilities.minImageExtent.height
-		}
-		else if (actual_extent.height > capabilities.maxImageExtent.height) {
+		} else if (actual_extent.height > capabilities.maxImageExtent.height) {
 			actual_extent.height = capabilities.maxImageExtent.height
 		}
 
@@ -43,8 +41,7 @@ create_swap_chain :: proc() {
 	if len(swap_chain_support.formats) == 0 {
 		fmt.fprintln(os.stderr, "Swap chain support not available (no formats)")
 		os.exit(1)
-	}
-	else if (len(swap_chain_support.present_modes) == 0) {
+	} else if (len(swap_chain_support.present_modes) == 0) {
 		fmt.fprintln(os.stderr, "Swap chain support not available (no present modes)")
 		os.exit(1)
 	}
@@ -52,7 +49,7 @@ create_swap_chain :: proc() {
 	fmt.printfln(
 		" Swap chain support: %d formats, %d present modes",
 		len(swap_chain_support.formats),
-		len(swap_chain_support.present_modes)
+		len(swap_chain_support.present_modes),
 	)
 	
 	// Choose the best surface format from the available formats
@@ -121,7 +118,7 @@ create_swap_chain :: proc() {
 	// Transition the images to a valid layout
     // Begin the command buffer
     begin_info := vk.CommandBufferBeginInfo {
-		sType = vk.StructureType.COMMAND_BUFFER_BEGIN_INFO
+		sType = vk.StructureType.COMMAND_BUFFER_BEGIN_INFO,
 	}
 
 	command_buffer := instance.command_buffers[0]
@@ -169,7 +166,7 @@ create_swap_chain :: proc() {
 			{},              // Dependency flags (not used in this case)
             0, nil,          // Memory barriers
             0, nil,          // Buffer memory barriers
-            1, &barrier      // Image memory barriers
+            1, &barrier,     // Image memory barriers
         )
     }
 
@@ -196,7 +193,7 @@ create_swap_chain :: proc() {
 
 	for i := 0; i < len(swap_chain.images); i += 1 {
 		swap_chain.image_views[i] = create_image_view(
-			swap_chain.images[i], surface_format.format, {.COLOR}
+			swap_chain.images[i], surface_format.format, {.COLOR},
 		)
 	}
 	
@@ -213,7 +210,7 @@ create_swap_chain :: proc() {
 }
 
 cleanup_swap_chain :: proc() {
-	fmt.printf("Cleaning up swap chain\n");
+	fmt.printf("Cleaning up swap chain\n")
 	
 	for i := 0; i < len(swap_chain.images); i += 1 {
 		vk.DestroyImageView(instance.device, swap_chain.image_views[i], nil)
@@ -223,7 +220,7 @@ cleanup_swap_chain :: proc() {
 	delete(swap_chain.image_views)
 	swap_chain.image_views = nil
 
-	vk.DestroySwapchainKHR(instance.device, swap_chain.swap_chain, nil);
+	vk.DestroySwapchainKHR(instance.device, swap_chain.swap_chain, nil)
 }
 
 recreate_swap_chain :: proc() {

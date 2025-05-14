@@ -126,7 +126,7 @@ create_vertex_buffer_pipeline :: proc(
 			stage = {.FRAGMENT},
 			module = frag_shader_module,
 			pName = "main",
-		}
+		},
 	}
 	
 	binding_description_var := binding_description
@@ -200,7 +200,7 @@ create_vertex_buffer_pipeline :: proc(
 	dynamic_state := vk.PipelineDynamicStateCreateInfo {
 		sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		dynamicStateCount = 2,
-		pDynamicStates = &dynamic_states[0]
+		pDynamicStates = &dynamic_states[0],
 	}
 	
 	push_constants_range_var := push_constants_range
@@ -297,7 +297,7 @@ create_screen_pipeline :: proc(vert_shader_path: string, frag_shader_path: strin
 			stage = {.FRAGMENT},
 			module = frag_shader_module,
 			pName = "main",
-		}
+		},
 	}
 	
 	vertex_input_info := vk.PipelineVertexInputStateCreateInfo{
@@ -354,7 +354,7 @@ create_screen_pipeline :: proc(vert_shader_path: string, frag_shader_path: strin
 	dynamic_state := vk.PipelineDynamicStateCreateInfo {
 		sType = .PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		dynamicStateCount = 2,
-		pDynamicStates = &dynamic_states[0]
+		pDynamicStates = &dynamic_states[0],
 	}
 	
 	pipeline_layout_info := vk.PipelineLayoutCreateInfo {

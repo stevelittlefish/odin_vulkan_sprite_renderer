@@ -203,7 +203,7 @@ get_attribute_descriptions :: proc() -> [2]vk.VertexInputAttributeDescription {
 			location = 1,
 			format = .R32G32_SFLOAT,
 			offset = cast(u32) offset_of(Vertex, tex_coord),
-		}
+		},
 	}
 	return attribute_descriptions
 }
@@ -319,8 +319,7 @@ create_tiles :: proc() {
 			// Debug test stuff
 			if (tiles[idx] == EMPTY) {
 				fmt.print("-- ")
-			}
-			else {
+			} else {
 				if (tiles[idx] < 10) {
 					fmt.print("0")
 				}
@@ -501,7 +500,7 @@ init_vulkan :: proc() {
 	// Screen pipeline is simple and has no vertex input
 	screen_pipeline = vkx.create_screen_pipeline(
 		"shaders/screen.vert.spv",
-		"shaders/screen.frag.spv"
+		"shaders/screen.frag.spv",
 	)
 
 	// ----- Create the buffers -----
@@ -551,7 +550,7 @@ init_vulkan :: proc() {
 			ubo_size,
 			{.UNIFORM_BUFFER},
 			{.HOST_VISIBLE, .HOST_COHERENT},
-		);
+		)
 
 		// Map the buffer memory and copy the vertex data into it
 		vk.MapMemory(vkx.instance.device, uniform_buffers[i].memory, 0, ubo_size, {}, &uniform_buffers_mapped[i])
@@ -599,7 +598,7 @@ init_vulkan :: proc() {
 		// Transition the image layout to depth stencil attachment
 		vkx.transition_image_layout_tmp_buffer(
 			depth_images[i].image, depth_format,
-			.UNDEFINED, .DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+			.UNDEFINED, .DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 		)
 	}
 
@@ -663,7 +662,7 @@ init_vulkan :: proc() {
 						imageLayout = .SHADER_READ_ONLY_OPTIMAL,
 						imageView = texture.view,
 						sampler = texture_sampler,
-					}
+					},
 				)
 			}
 
@@ -804,21 +803,17 @@ update :: proc(dt: f64) {
 	for i := 0; i < NUM_MONSTERS; i += 1 {
 		if (monsters[i].spd[0] > 0 && monsters[i].pos[0] >= X_TILES) {
 			monsters[i].spd[0] *= -1
-		}
-		else if (monsters[i].spd[0] < 0 && monsters[i].pos[0] <= 0) {
+		} else if (monsters[i].spd[0] < 0 && monsters[i].pos[0] <= 0) {
 			monsters[i].spd[0] *= -1
-		}
-		else {
+		} else {
 			monsters[i].pos[0] += dt * monsters[i].spd[0]
 		}
 
 		if (monsters[i].spd[1] > 0 && monsters[i].pos[1] >= Y_TILES) {
 			monsters[i].spd[1] *= -1
-		}
-		else if (monsters[i].spd[1] < 0 && monsters[i].pos[1] <= 0) {
+		} else if (monsters[i].spd[1] < 0 && monsters[i].pos[1] <= 0) {
 			monsters[i].spd[1] *= -1
-		}
-		else {
+		} else {
 			monsters[i].pos[1] += dt * monsters[i].spd[1]
 		}
 	}
@@ -861,13 +856,13 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 		offscreen_images[current_frame].image,
 		vkx.swap_chain.image_format,
 		.SHADER_READ_ONLY_OPTIMAL,
-		.COLOR_ATTACHMENT_OPTIMAL
+		.COLOR_ATTACHMENT_OPTIMAL,
 	)
 
 	clear_color := vk.ClearValue {
 		color = vk.ClearColorValue {
 			float32 = {0.0, 0.0, 0.0, 1.0},
-		}
+		},
 	}
 
 	color_attachment_info := vk.RenderingAttachmentInfo {
@@ -1027,7 +1022,7 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 		vkx.swap_chain.images[image_index],
 		vkx.swap_chain.image_format,
 		.COLOR_ATTACHMENT_OPTIMAL,
-		.PRESENT_SRC_KHR
+		.PRESENT_SRC_KHR,
 	)
 
 	if vk.EndCommandBuffer(command_buffer) != .SUCCESS {
@@ -1037,7 +1032,7 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 }
 
 draw_frame :: proc() {
-	vk.WaitForFences(vkx.instance.device, 1, &vkx.sync_objects.in_flight_fences[current_frame], true, c.UINT64_MAX);
+	vk.WaitForFences(vkx.instance.device, 1, &vkx.sync_objects.in_flight_fences[current_frame], true, c.UINT64_MAX)
 
 	image_index: u32
 	result := vk.AcquireNextImageKHR(
@@ -1046,7 +1041,7 @@ draw_frame :: proc() {
 		timeout=c.UINT64_MAX,
 		semaphore=vkx.sync_objects.image_available_semaphores[current_frame],
 		fence={},
-		pImageIndex=&image_index
+		pImageIndex=&image_index,
 	)
 
 	if result == .ERROR_OUT_OF_DATE_KHR {
@@ -1061,7 +1056,7 @@ draw_frame :: proc() {
 	
 	// Update all uniform buffers with transform data
 	ubo := UniformBufferObject {
-		t = f32(t)
+		t = f32(t),
 	}
 	
 	// Update monster transforms
@@ -1088,7 +1083,7 @@ draw_frame :: proc() {
 		translation: glsl.vec3 = {
 			f32(monsters[i].pos[0]),
 			f32(monsters[i].pos[1] + math.sin(t * 4.0 + f64(i) * 5) * 0.2),
-			f32(monsters[i].pos[2])
+			f32(monsters[i].pos[2]),
 		}
 		model_matrix = glsl.mat4Translate(translation) * model_matrix
 
@@ -1161,8 +1156,7 @@ draw_frame :: proc() {
 			fmt.print("Swapchain was suboptimal\n")
 		}
 		suboptimal_swapchain_count += 1
-	}
-	else {
+	} else {
 		// Reset to 0 if it doesn't come back like that every frame
 		suboptimal_swapchain_count = 0
 	}
@@ -1171,17 +1165,14 @@ draw_frame :: proc() {
 		fmt.print("Framebuffer resized - recreating swap chain\n")
 		framebuffer_resized = false
 		vkx.recreate_swap_chain()
-	}
-	else if suboptimal_swapchain_count >= SUBOPTIMAL_SWAPCHAIN_THRESHOLD {
+	} else if suboptimal_swapchain_count >= SUBOPTIMAL_SWAPCHAIN_THRESHOLD {
 		suboptimal_swapchain_count = 0
 		fmt.print("Swapchain is still suboptimal - recreating\n")
 		vkx.recreate_swap_chain()
-	}
-	else if result == .ERROR_OUT_OF_DATE_KHR {
+	} else if result == .ERROR_OUT_OF_DATE_KHR {
 		fmt.printf("Couldn't present swap chain image - recreating swap chain (result: %d)\n", result)
 		vkx.recreate_swap_chain()
-	}
-	else if result != .SUBOPTIMAL_KHR && result != .SUCCESS {
+	} else if result != .SUBOPTIMAL_KHR && result != .SUCCESS {
 		fmt.eprintf("failed to present swap chain image! (result: %d)\n", result)
 		os.exit(1)
 	}
@@ -1249,8 +1240,7 @@ main :: proc() {
 				if event.key.key == sdl.K_ESCAPE || event.key.key == sdl.K_Q {
 					fmt.println("Quitting...")
 					running = false
-				}
-				else if (event.key.key == sdl.K_F11) {
+				} else if (event.key.key == sdl.K_F11) {
 					// Toggle fullscreen
 					fullscreen = !fullscreen
 					sdl.SetWindowFullscreen(window, fullscreen)
@@ -1310,6 +1300,6 @@ main :: proc() {
 	fmt.printf(
 		"Built: %s %s\n",
 		time.to_string_yyyy_mm_dd(compile_time, date_buf[:]),
-		time.to_string_hms(compile_time, time_buf[:])
+		time.to_string_hms(compile_time, time_buf[:]),
 	)
 }

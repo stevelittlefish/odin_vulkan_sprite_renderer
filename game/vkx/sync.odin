@@ -13,7 +13,7 @@ init_sync_objects :: proc() {
 
 	fence_info := vk.FenceCreateInfo {
 		sType = .FENCE_CREATE_INFO,
-		flags = {.SIGNALED}
+		flags = {.SIGNALED},
 	}
 
 	for i := 0; i < FRAMES_IN_FLIGHT; i += 1 {

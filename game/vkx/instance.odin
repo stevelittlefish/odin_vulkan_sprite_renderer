@@ -36,13 +36,13 @@ check_validation_layer_support :: proc() -> bool {
 		}
 
 		if (!layer_found) {
-			return false;
+			return false
 		}
 	}
 	
 	fmt.println(" All validation layers are supported")
 
-	return true;
+	return true
 }
 
 get_required_extensions :: proc() -> [dynamic]cstring {
@@ -55,7 +55,7 @@ get_required_extensions :: proc() -> [dynamic]cstring {
 	 */
 	// Get the required extensions from SDL and set count to the number of extensions
 	sdl_extensions_count: u32
-	sdl_extensions := sdl.Vulkan_GetInstanceExtensions(&sdl_extensions_count);
+	sdl_extensions := sdl.Vulkan_GetInstanceExtensions(&sdl_extensions_count)
 
 	if sdl_extensions == nil {
 		fmt.fprintln(os.stderr, "Failed to get required extensions from GLFW")
@@ -169,7 +169,7 @@ pick_physical_device :: proc() -> vk.PhysicalDevice {
 		if (indices.has_present_family) {
 			swap_chain_support := query_swap_chain_support(devices[i], instance.surface)
 			swap_chain_adequate = len(swap_chain_support.formats) > 0 && len(swap_chain_support.present_modes) > 0
-			cleanup_swap_chain_support(&swap_chain_support);
+			cleanup_swap_chain_support(&swap_chain_support)
 		}
 		
         if indices.has_graphics_family && indices.has_present_family && swap_chain_adequate {
@@ -186,7 +186,7 @@ pick_physical_device :: proc() -> vk.PhysicalDevice {
 }
 
 init_instance :: proc(window: ^sdl.Window) {
-	fmt.println("Initialising Vulkan (VKX)");
+	fmt.println("Initialising Vulkan (VKX)")
 	
 	// Keep a reference to the window to avoid passing it around later
 	instance.window = window
@@ -226,7 +226,7 @@ init_instance :: proc(window: ^sdl.Window) {
 		applicationVersion = vk.MAKE_VERSION(1, 0, 0),
 		pEngineName = "No Engine",
 		engineVersion = vk.MAKE_VERSION(1, 0, 0),
-		apiVersion = vk.API_VERSION_1_3
+		apiVersion = vk.API_VERSION_1_3,
 	}
 
 	instance_create_info := vk.InstanceCreateInfo {

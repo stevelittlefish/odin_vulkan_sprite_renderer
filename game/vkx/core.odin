@@ -96,7 +96,7 @@ VALIDATION_LAYERS: [1]cstring : {"VK_LAYER_KHRONOS_validation"}
 
 DEVICE_EXTENSIONS: [2]cstring : {
 	vk.KHR_SWAPCHAIN_EXTENSION_NAME,
-	vk.EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
+	vk.EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
 }
 
 FRAMES_IN_FLIGHT :: 2
@@ -162,7 +162,7 @@ cleanup_swap_chain_support :: proc(swap_chain_support: ^SwapChainSupportDetails)
 }
 
 create_image_view :: proc(
-		image: vk.Image, format: vk.Format, aspect_flags: vk.ImageAspectFlags
+		image: vk.Image, format: vk.Format, aspect_flags: vk.ImageAspectFlags,
 ) -> vk.ImageView {
 	view_info := vk.ImageViewCreateInfo {
 		sType = vk.StructureType.IMAGE_VIEW_CREATE_INFO,
@@ -399,14 +399,11 @@ transition_image_layout :: proc(
 		pImageMemoryBarriers = &barrier,
 	}
 
-	vk.CmdPipelineBarrier2(
-		command_buffer,
-		&dependency_info
-	)
+	vk.CmdPipelineBarrier2(command_buffer, &dependency_info)
 }
 
 transition_image_layout_tmp_buffer :: proc (
-		image: vk.Image, format: vk.Format, old_layout: vk.ImageLayout, new_layout: vk.ImageLayout
+		image: vk.Image, format: vk.Format, old_layout: vk.ImageLayout, new_layout: vk.ImageLayout,
 ) {
 	command_buffer := begin_single_time_commands()
 	
@@ -415,7 +412,7 @@ transition_image_layout_tmp_buffer :: proc (
 		image,
 		format,
 		old_layout,
-		new_layout
+		new_layout,
 	)
 	
 	end_single_time_commands(command_buffer)
@@ -457,7 +454,7 @@ copy_buffer_to_image :: proc(buffer: vk.Buffer, image: vk.Image, width: u32, hei
 			width = width,
 			height = height,
 			depth = 1,
-		}
+		},
 	}
 
 	vk.CmdCopyBufferToImage(
@@ -466,7 +463,7 @@ copy_buffer_to_image :: proc(buffer: vk.Buffer, image: vk.Image, width: u32, hei
 		image,
 		.TRANSFER_DST_OPTIMAL,
 		1,
-		&region
+		&region,
 	)
 
     end_single_time_commands(command_buffer)
@@ -528,7 +525,7 @@ cleanup_buffer :: proc(buffer: ^Buffer) {
 create_and_populate_buffer :: proc(
 		vertices: rawptr,
 		buffer_size: vk.DeviceSize,
-		usage_flags: vk.BufferUsageFlags
+		usage_flags: vk.BufferUsageFlags,
 ) -> Buffer {
 	// We should probably add a flag to decide if the buffer should be host coherent
 	// (and not use a staging buffer)
@@ -559,7 +556,7 @@ create_and_populate_buffer :: proc(
 
 create_image :: proc(
 		width: u32, height: u32, format:vk.Format, tiling: vk.ImageTiling,
-		usage: vk.ImageUsageFlags, properties: vk.MemoryPropertyFlags
+		usage: vk.ImageUsageFlags, properties: vk.MemoryPropertyFlags,
 ) -> Image {
 	image_info := vk.ImageCreateInfo {
 		sType = .IMAGE_CREATE_INFO,

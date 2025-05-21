@@ -385,6 +385,7 @@ init_instance :: proc(window: ^sdl.Window) {
 
 	// Set frames in flight to be the number of swap chain images
 	instance.frames_in_flight = cast(u32) len(instance.swap_chain.images)
+	fmt.printfln("NUM FRAMES IN FLIGHT: %d", instance.frames_in_flight)
 
 	// ----- Create the command buffers -----
 	instance.command_buffers = make([]vk.CommandBuffer, instance.frames_in_flight)

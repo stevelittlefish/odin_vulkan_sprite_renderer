@@ -1048,7 +1048,6 @@ draw_frame :: proc() {
 	sync_objects := &vkx.instance.sync_objects
 	swap_chain := &vkx.instance.swap_chain
 
-	fmt.println("Current frame: ", current_frame)
 	vk.WaitForFences(vkx.instance.device, 1, &sync_objects.in_flight_fences[current_frame], true, c.UINT64_MAX)
 
 	image_index: u32
@@ -1060,6 +1059,8 @@ draw_frame :: proc() {
 		fence={},
 		pImageIndex=&image_index,
 	)
+
+	fmt.printfln("Frame: %d, Image index: %d", current_frame, image_index)
 
 	if result == .ERROR_OUT_OF_DATE_KHR {
 		fmt.printf("Couldn't acquire swap chain image - recreating swap chain\n")
@@ -1139,7 +1140,7 @@ draw_frame :: proc() {
 	record_command_buffer(vkx.instance.command_buffers[current_frame], image_index)
 
 	wait_semaphore := &sync_objects.image_available_semaphores[current_frame]
-	signal_semaphore := &sync_objects.render_finished_semaphores[current_frame]
+	signal_semaphore := &sync_objects.render_finished_semaphores[image_index]
 	wait_stages: vk.PipelineStageFlags = {.COLOR_ATTACHMENT_OUTPUT}
 
 	submit_info := vk.SubmitInfo {

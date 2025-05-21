@@ -73,8 +73,11 @@ create_swap_chain :: proc(swap_chain: ^SwapChain) {
 
 	swap_chain.extent = choose_swap_extent(instance.window, &swap_chain_support.capabilities)
 	fmt.printfln(" Swap chain extent: %d x %d", swap_chain.extent.width, swap_chain.extent.height)
-
-	image_count := swap_chain_support.capabilities.minImageCount + 1
+	// Default to triple buffering
+	image_count: u32 = 3
+	if swap_chain_support.capabilities.minImageCount > image_count {
+		image_count = swap_chain_support.capabilities.minImageCount
+	}
 	if swap_chain_support.capabilities.maxImageCount > 0 && image_count > swap_chain_support.capabilities.maxImageCount {
 		image_count = swap_chain_support.capabilities.maxImageCount
 	}
@@ -116,24 +119,8 @@ create_swap_chain :: proc(swap_chain: ^SwapChain) {
 	vk.GetSwapchainImagesKHR(instance.device, swap_chain.swap_chain, &num_swap_chain_images, raw_data(swap_chain.images))
 
 	// Transition the images to a valid layout
-    // Begin the command buffer
-    begin_info := vk.CommandBufferBeginInfo {
-		sType = vk.StructureType.COMMAND_BUFFER_BEGIN_INFO,
-	}
-
-	// command_buffer := instance.command_buffers[0]
 	command_buffer := begin_single_time_commands()
 
-    if vk.ResetCommandBuffer(command_buffer, {}) != .SUCCESS {
-        fmt.fprintln(os.stderr, "failed to reset command buffer!")
-        os.exit(1)
-    }
-
-    if vk.BeginCommandBuffer(command_buffer, &begin_info) != .SUCCESS {
-        fmt.fprintln(os.stderr, "failed to begin recording command buffer!")
-        os.exit(1)
-    }
-	
 	// All of the swap chain images are now in the VK_IMAGE_LAYOUT_UNDEFINED layout, which is not a valid
 	// layout for rendering - we need to transition them to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
 
@@ -170,27 +157,6 @@ create_swap_chain :: proc(swap_chain: ^SwapChain) {
             1, &barrier,     // Image memory barriers
         )
     }
-
-	/*
-	// TODO: is this right?
-    if vk.EndCommandBuffer(command_buffer) != .SUCCESS {
-        fmt.fprintln(os.stderr, "failed to record command buffer!")
-        os.exit(1)
-    }
-	
-	// Submit the command buffer
-	submit_info := vk.SubmitInfo {
-		sType = vk.StructureType.SUBMIT_INFO,
-		commandBufferCount = 1,
-		pCommandBuffers = &command_buffer,
-	}
-	
-	// TODO: is this right? VK_NULL_HANDLE was passed in for the fence in the C version
-	if vk.QueueSubmit(instance.graphics_queue, 1, &submit_info, vk.Fence{}) != .SUCCESS {
-		fmt.fprintln(os.stderr, "failed to submit command buffer!")
-		os.exit(1)
-	}
-	*/
 
 	end_single_time_commands(command_buffer)
 	

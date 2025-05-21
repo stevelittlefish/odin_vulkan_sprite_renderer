@@ -215,15 +215,11 @@ cleanup_swap_chain :: proc(swap_chain: ^SwapChain) {
 }
 
 recreate_swap_chain :: proc(swap_chain: ^SwapChain) {
-	// TODO: fix the memory leak!
-	fmt.println("WARNING: memory leak in vkx.recreate_swap_chain")
-
 	width, height: i32
 	sdl.GetWindowSize(instance.window, &width, &height)
 
 	vk.DeviceWaitIdle(instance.device)
 
 	cleanup_swap_chain(swap_chain)
-
 	create_swap_chain(swap_chain)
 }

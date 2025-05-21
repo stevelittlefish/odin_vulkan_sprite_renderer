@@ -214,6 +214,7 @@ init_instance :: proc(window: ^sdl.Window) {
 	
 	// This will include the validation layer extensions
 	enabled_extensions := get_required_extensions()
+	defer delete(enabled_extensions)
 
 	fmt.println(" Requesting instance extensions:")
 	for extension in enabled_extensions {
@@ -433,11 +434,13 @@ cleanup_instance :: proc() {
 	cleanup_swap_chain(&instance.swap_chain)
 
 	vk.DestroyCommandPool(instance.device, instance.command_pool, nil)
+	delete(instance.command_buffers)
 
 	for &sync_objects in instance.frame_sync_objects {
 		vk.DestroySemaphore(instance.device, sync_objects.image_available_semaphore, nil)
 		vk.DestroyFence(instance.device, sync_objects.in_flight_fence, nil)
 	}
+	delete(instance.frame_sync_objects)
 
 	vk.DestroyDevice(instance.device, nil)
 	

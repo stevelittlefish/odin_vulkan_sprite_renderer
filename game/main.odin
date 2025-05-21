@@ -2,6 +2,7 @@ package game
 
 import "base:runtime"
 import "base:intrinsics"
+import "core:mem"
 import "core:fmt"
 import "core:os"
 import "core:time"
@@ -1192,7 +1193,25 @@ draw_frame :: proc() {
 }
 
 main :: proc() {
-	fmt.println("Hello, Vulkan!\n")
+	fmt.println("Hello, Vulkan!")
+	fmt.print("\n")
+	
+	when ODIN_DEBUG {
+		fmt.println("DEBUG MODE")
+		fmt.println("Initialising tracking allocator")
+		track: mem.Tracking_Allocator
+		mem.tracking_allocator_init(&track, context.allocator)
+		context.allocator = mem.tracking_allocator(&track)
+
+		defer {
+			if len(track.allocation_map) > 0 {
+				for _, entry in track.allocation_map {
+					fmt.eprintfln("%v leaked %v bytes", entry.location, entry.size)
+				}
+			}
+			mem.tracking_allocator_destroy(&track)
+		}
+	}
 
 	// Initialise SDL
 	if !sdl.Init(sdl.INIT_VIDEO) {

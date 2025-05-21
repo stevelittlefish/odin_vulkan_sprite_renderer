@@ -383,10 +383,9 @@ init_instance :: proc(window: ^sdl.Window) {
 	// ----- Create the swap chain -----
 	create_swap_chain(&instance.swap_chain)
 
-	// Set frames in flight to be the number of swap chain images
 	// instance.frames_in_flight = cast(u32) len(instance.swap_chain.images)
 	instance.frames_in_flight = 2
-	fmt.printfln("NUM FRAMES IN FLIGHT: %d", instance.frames_in_flight)
+	fmt.printfln(" Frames in flight: %d", instance.frames_in_flight)
 
 	// ----- Create the command buffers -----
 	instance.command_buffers = make([]vk.CommandBuffer, instance.frames_in_flight)
@@ -431,7 +430,14 @@ init_instance :: proc(window: ^sdl.Window) {
 cleanup_instance :: proc() {
 	fmt.println("Cleaning up Vulkan Instance (VKX)")
 	
+	cleanup_swap_chain(&instance.swap_chain)
+
 	vk.DestroyCommandPool(instance.device, instance.command_pool, nil)
+
+	for &sync_objects in instance.frame_sync_objects {
+		vk.DestroySemaphore(instance.device, sync_objects.image_available_semaphore, nil)
+		vk.DestroyFence(instance.device, sync_objects.in_flight_fence, nil)
+	}
 
 	vk.DestroyDevice(instance.device, nil)
 	
@@ -443,11 +449,6 @@ cleanup_instance :: proc() {
 		}
 	}
 	*/
-
-	for &sync_objects in instance.frame_sync_objects {
-		vk.DestroySemaphore(instance.device, sync_objects.image_available_semaphore, nil)
-		vk.DestroyFence(instance.device, sync_objects.in_flight_fence, nil)
-	}
 
 	vk.DestroySurfaceKHR(instance.instance, instance.surface, nil)
 

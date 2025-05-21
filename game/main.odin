@@ -772,11 +772,8 @@ init_vulkan :: proc() {
 cleanup_vulkan :: proc() {
 	fmt.println("Cleaning up Vulkan")
 
-	fmt.println("TODO!")
-	// TODO: implement
-	
-	/*
-	vkx.cleanup_swap_chain()
+	// vkx.cleanup_swap_chain()
+	frames_in_flight := int(vkx.instance.frames_in_flight)
 
 	vk.DestroySampler(vkx.instance.device, texture_sampler, nil)
 
@@ -784,7 +781,7 @@ cleanup_vulkan :: proc() {
 		vkx.cleanup_image(&textures[i])
 	}
 
-	for i := 0 ; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+	for i := 0 ; i < frames_in_flight; i += 1 {
 		vkx.cleanup_buffer(&uniform_buffers[i])
 	}
 	
@@ -799,15 +796,12 @@ cleanup_vulkan :: proc() {
 	vkx.cleanup_buffer(&index_buffer)
 	vkx.cleanup_buffer(&sprite_vertex_buffer)
 
-	vkx.cleanup_sync_objects()
-
-	for i := 0; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+	for i := 0; i < frames_in_flight; i += 1 {
 		vkx.cleanup_image(&offscreen_images[i])
 		vkx.cleanup_image(&depth_images[i])
 	}
 
 	vkx.cleanup_instance()
-	*/
 }
 
 update :: proc(dt: f64) {
@@ -1059,8 +1053,6 @@ draw_frame :: proc() {
 		fence={},
 		pImageIndex=&image_index,
 	)
-
-	fmt.printfln("Frame: %d, Image index: %d", current_frame, image_index)
 
 	if result == .ERROR_OUT_OF_DATE_KHR {
 		fmt.printf("Couldn't acquire swap chain image - recreating swap chain\n")

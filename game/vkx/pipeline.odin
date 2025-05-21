@@ -220,7 +220,7 @@ create_vertex_buffer_pipeline :: proc(
 	rendering_info := vk.PipelineRenderingCreateInfo {
 		sType = .PIPELINE_RENDERING_CREATE_INFO,
 		colorAttachmentCount = 1,
-		pColorAttachmentFormats = &swap_chain.image_format,
+		pColorAttachmentFormats = &instance.swap_chain.image_format,
 		depthAttachmentFormat = find_depth_format(),
 	}
 	
@@ -372,7 +372,7 @@ create_screen_pipeline :: proc(vert_shader_path: string, frag_shader_path: strin
 	rendering_info := vk.PipelineRenderingCreateInfo {
 		sType = .PIPELINE_RENDERING_CREATE_INFO,
 		colorAttachmentCount = 1,
-		pColorAttachmentFormats = &swap_chain.image_format,
+		pColorAttachmentFormats = &instance.swap_chain.image_format,
 		depthAttachmentFormat = find_depth_format(),
 	}
 	

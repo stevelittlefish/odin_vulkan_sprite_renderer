@@ -9,7 +9,7 @@ import sdl "vendor:sdl3"
 import stbi "vendor:stb/image"
 
 // Main VKX Instance struct
-Instance :: struct {
+VkxInstance :: struct {
 	// Vulkan instance
 	instance: vk.Instance,
 	// Vulkan debug messenger
@@ -26,10 +26,16 @@ Instance :: struct {
 	graphics_queue: vk.Queue,
 	// Presentation queue
 	present_queue: vk.Queue,
+	// Number of frames in flight
+	frames_in_flight: u32,
+	// Swap chain related data
+	swap_chain: SwapChain,
 	// Single command pool for the program
 	command_pool: vk.CommandPool,
 	// Command buffers for each frame in flight
 	command_buffers: []vk.CommandBuffer,
+	// Semaphores and fence
+	sync_objects: SyncObjects,
 }
 
 SwapChain :: struct {
@@ -78,9 +84,9 @@ Image :: struct {
 }
 
 SyncObjects :: struct {
-	image_available_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
-	render_finished_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
-	in_flight_fences: [FRAMES_IN_FLIGHT]vk.Fence,
+	image_available_semaphores: []vk.Semaphore,
+	render_finished_semaphores: []vk.Semaphore,
+	in_flight_fences: []vk.Fence,
 } 
 
 
@@ -99,12 +105,8 @@ DEVICE_EXTENSIONS: [2]cstring : {
 	vk.EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
 }
 
-FRAMES_IN_FLIGHT :: 2
-
 // Global state:
-instance: Instance
-swap_chain: SwapChain
-sync_objects: SyncObjects
+instance: VkxInstance
 
 
 find_queue_families :: proc(device: vk.PhysicalDevice, surface: vk.SurfaceKHR) -> QueueFamilyIndices {

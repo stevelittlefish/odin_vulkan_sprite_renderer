@@ -108,9 +108,9 @@ window: ^sdl.Window = nil
 // Single descriptor pool for the whole app
 descriptor_pool: vk.DescriptorPool
 // Descriptor sets for the main pipelines
-descriptor_sets: [vkx.FRAMES_IN_FLIGHT]vk.DescriptorSet
+descriptor_sets: []vk.DescriptorSet
 // Descriptor sets for the screen pipeline
-screen_descriptor_sets: [vkx.FRAMES_IN_FLIGHT]vk.DescriptorSet
+screen_descriptor_sets: []vk.DescriptorSet
 
 // Which frame in the frames in flight are we rendering?
 current_frame: u32 = 0
@@ -147,12 +147,12 @@ textures: [dynamic]vkx.Image
 texture_sampler: vk.Sampler
 
 // Offscreen image for rendering to
-offscreen_images: [vkx.FRAMES_IN_FLIGHT]vkx.Image
-depth_images: [vkx.FRAMES_IN_FLIGHT]vkx.Image
+offscreen_images: []vkx.Image
+depth_images: []vkx.Image
 
 // Uniform buffer used in all pipelines
-uniform_buffers: [vkx.FRAMES_IN_FLIGHT]vkx.Buffer
-uniform_buffers_mapped: [vkx.FRAMES_IN_FLIGHT]rawptr
+uniform_buffers: []vkx.Buffer
+uniform_buffers_mapped: []rawptr
 
 // Matrices for rendering
 projection_matrix: glsl.mat4
@@ -457,9 +457,11 @@ create_monsters :: proc() {
 init_vulkan :: proc() {
 	// ----- Initialise the vulkan instance and devices -----
 	vkx.init_instance(window)
-
-	// ----- Create the swap chain -----
-	vkx.create_swap_chain()
+	
+	// For convenience...
+	instance := &vkx.instance
+	swap_chain := &instance.swap_chain
+	frames_in_flight := instance.frames_in_flight
 	
 	// ----- Create the tile graphics pipeline -----
 	// Vertex input bindng and attributes
@@ -544,6 +546,9 @@ init_vulkan :: proc() {
 		fmt.eprintfln("Tried to allocate a buffer with %d bytes, which is greater than the maximum (65536)", ubo_size)
 		os.exit(1)
 	}
+	
+	uniform_buffers = make([]vkx.Buffer, frames_in_flight)
+	uniform_buffers_mapped = make([]rawptr, frames_in_flight)
 
 	for i := 0; i < len(uniform_buffers); i += 1 {
 		uniform_buffers[i] = vkx.create_buffer(
@@ -553,17 +558,19 @@ init_vulkan :: proc() {
 		)
 
 		// Map the buffer memory and copy the vertex data into it
-		vk.MapMemory(vkx.instance.device, uniform_buffers[i].memory, 0, ubo_size, {}, &uniform_buffers_mapped[i])
+		vk.MapMemory(instance.device, uniform_buffers[i].memory, 0, ubo_size, {}, &uniform_buffers_mapped[i])
 	}
 
 	// ----- Create the offscreen images -----
 	depth_format := vkx.find_depth_format()
-
+	
+	offscreen_images = make([]vkx.Image, frames_in_flight)
+	depth_images = make([]vkx.Image, frames_in_flight)
 	for i := 0; i < len(offscreen_images); i += 1 {
 		offscreen_images[i] = vkx.create_image(
 			SCREEN_WIDTH,
 			SCREEN_HEIGHT,
-			vkx.swap_chain.image_format,
+			swap_chain.image_format,
 			.OPTIMAL,
 			{.COLOR_ATTACHMENT, .SAMPLED},
 			{.DEVICE_LOCAL},
@@ -571,14 +578,14 @@ init_vulkan :: proc() {
 
 		offscreen_images[i].view = vkx.create_image_view(
 			offscreen_images[i].image,
-			vkx.swap_chain.image_format,
+			swap_chain.image_format,
 			{.COLOR},
 		)
 
 		// transition the image layout to color attachment optimal
 		vkx.transition_image_layout_tmp_buffer(
 			offscreen_images[i].image,
-			vkx.swap_chain.image_format,
+			swap_chain.image_format,
 			.UNDEFINED,
 			.SHADER_READ_ONLY_OPTIMAL,
 		)
@@ -606,11 +613,11 @@ init_vulkan :: proc() {
 	desc_pool_sizes:= [?]vk.DescriptorPoolSize {
 		{
 			type = .UNIFORM_BUFFER,
-			descriptorCount = vkx.FRAMES_IN_FLIGHT * 2,
+			descriptorCount = frames_in_flight * 2,
 		},
 		{
 			type = .COMBINED_IMAGE_SAMPLER,
-			descriptorCount = cast(u32) (vkx.FRAMES_IN_FLIGHT * len(textures) + vkx.FRAMES_IN_FLIGHT),
+			descriptorCount = frames_in_flight * u32(len(textures)) + frames_in_flight,
 		},
 	}
 	
@@ -618,35 +625,36 @@ init_vulkan :: proc() {
 		sType = .DESCRIPTOR_POOL_CREATE_INFO,
 		poolSizeCount = 2,
 		pPoolSizes = &desc_pool_sizes[0],
-		maxSets = vkx.FRAMES_IN_FLIGHT * 2,
+		maxSets = frames_in_flight * 2,
 	}
 
-	if vk.CreateDescriptorPool(vkx.instance.device, &desc_pool_info, nil, &descriptor_pool) != .SUCCESS {
+	if vk.CreateDescriptorPool(instance.device, &desc_pool_info, nil, &descriptor_pool) != .SUCCESS {
 		fmt.eprintf("failed to create descriptor pool!\n")
 		os.exit(1)
 	}
 	
 	{
 		// ----- Create the descriptor sets -----
-		ds_layouts: [vkx.FRAMES_IN_FLIGHT]vk.DescriptorSetLayout
-		for i := 0; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+		ds_layouts := make([]vk.DescriptorSetLayout, frames_in_flight, context.temp_allocator)
+		for i: u32 = 0; i < frames_in_flight; i += 1 {
 			ds_layouts[i] = tile_pipeline.descriptor_set_layout
 		}
 		
 		ds_alloc_info := vk.DescriptorSetAllocateInfo {
 			sType = .DESCRIPTOR_SET_ALLOCATE_INFO,
 			descriptorPool = descriptor_pool,
-			descriptorSetCount = vkx.FRAMES_IN_FLIGHT,
+			descriptorSetCount = frames_in_flight,
 			pSetLayouts = &ds_layouts[0],
 		}
 		
 		// Create the base descriptor sets
-		if vk.AllocateDescriptorSets(vkx.instance.device, &ds_alloc_info, &descriptor_sets[0]) != .SUCCESS {
+		descriptor_sets = make([]vk.DescriptorSet, instance.frames_in_flight)
+		if vk.AllocateDescriptorSets(instance.device, &ds_alloc_info, &descriptor_sets[0]) != .SUCCESS {
 			fmt.eprintf("failed to allocate descriptor sets!\n")
 			os.exit(1)
 		}
 
-		for i := 0; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+		for i: u32 = 0; i < frames_in_flight; i += 1 {
 			buffer_info := vk.DescriptorBufferInfo {
 				buffer = uniform_buffers[i].buffer,
 				offset = 0,
@@ -691,31 +699,32 @@ init_vulkan :: proc() {
 				},
 			}
 
-			vk.UpdateDescriptorSets(vkx.instance.device, 2, &descriptor_writes[0], 0, nil)
+			vk.UpdateDescriptorSets(instance.device, 2, &descriptor_writes[0], 0, nil)
 		}
 	}
 
 	{
 		// ----- Create the screen descriptor sets -----
-		ds_layouts: [vkx.FRAMES_IN_FLIGHT]vk.DescriptorSetLayout
-		for i := 0; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+		ds_layouts := make([]vk.DescriptorSetLayout, frames_in_flight, context.temp_allocator)
+		for i: u32 = 0; i < frames_in_flight; i += 1 {
 			ds_layouts[i] = screen_pipeline.descriptor_set_layout
 		}
 
 		ds_alloc_info := vk.DescriptorSetAllocateInfo {
 			sType = .DESCRIPTOR_SET_ALLOCATE_INFO,
 			descriptorPool = descriptor_pool,
-			descriptorSetCount = vkx.FRAMES_IN_FLIGHT,
+			descriptorSetCount = frames_in_flight,
 			pSetLayouts = &ds_layouts[0],
 		}
 		
 		// Create the base descriptor sets
-		if vk.AllocateDescriptorSets(vkx.instance.device, &ds_alloc_info, &screen_descriptor_sets[0]) != .SUCCESS {
+		screen_descriptor_sets = make([]vk.DescriptorSet, instance.frames_in_flight)
+		if vk.AllocateDescriptorSets(instance.device, &ds_alloc_info, &screen_descriptor_sets[0]) != .SUCCESS {
 			fmt.eprintf("failed to allocate screen descriptor sets!\n")
 			os.exit(1)
 		}
 
-		for i := 0; i < vkx.FRAMES_IN_FLIGHT; i += 1 {
+		for i: u32 = 0; i < frames_in_flight; i += 1 {
 			buffer_info := vk.DescriptorBufferInfo {
 				buffer = uniform_buffers[i].buffer,
 				offset = 0,
@@ -753,12 +762,9 @@ init_vulkan :: proc() {
 				},
 			}
 
-			vk.UpdateDescriptorSets(vkx.instance.device, 2, &descriptor_writes[0], 0, nil)
+			vk.UpdateDescriptorSets(instance.device, 2, &descriptor_writes[0], 0, nil)
 		}
 	}
-
-	// ----- Create the semaphores and fences -----
-	vkx.init_sync_objects()
 
 	fmt.println("Initiialisation complete")
 }
@@ -766,6 +772,10 @@ init_vulkan :: proc() {
 cleanup_vulkan :: proc() {
 	fmt.println("Cleaning up Vulkan")
 
+	fmt.println("TODO!")
+	// TODO: implement
+	
+	/*
 	vkx.cleanup_swap_chain()
 
 	vk.DestroySampler(vkx.instance.device, texture_sampler, nil)
@@ -797,6 +807,7 @@ cleanup_vulkan :: proc() {
 	}
 
 	vkx.cleanup_instance()
+	*/
 }
 
 update :: proc(dt: f64) {
@@ -832,6 +843,8 @@ update :: proc(dt: f64) {
 }
 
 record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32) {
+	swap_chain := vkx.instance.swap_chain
+
 	begin_info := vk.CommandBufferBeginInfo {
 		sType = .COMMAND_BUFFER_BEGIN_INFO,
 	}
@@ -844,8 +857,8 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	// Memory barrier to transition from present source to color attachment
 	vkx.transition_image_layout(
 		command_buffer,
-		vkx.swap_chain.images[image_index],
-		vkx.swap_chain.image_format,
+		swap_chain.images[image_index],
+		swap_chain.image_format,
 		.PRESENT_SRC_KHR,
 		.COLOR_ATTACHMENT_OPTIMAL,
 	)
@@ -854,7 +867,7 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	vkx.transition_image_layout(
 		command_buffer,
 		offscreen_images[current_frame].image,
-		vkx.swap_chain.image_format,
+		swap_chain.image_format,
 		.SHADER_READ_ONLY_OPTIMAL,
 		.COLOR_ATTACHMENT_OPTIMAL,
 	)
@@ -983,23 +996,23 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	vkx.transition_image_layout(
 		command_buffer,
 		offscreen_images[current_frame].image,
-		vkx.swap_chain.image_format,
+		swap_chain.image_format,
 		.COLOR_ATTACHMENT_OPTIMAL,
 		.SHADER_READ_ONLY_OPTIMAL,
 	)
 
 	// -- Render the screen ---------------------------------------------------
 	// Update some parameters on the original structs
-	viewport.width = cast(f32) vkx.swap_chain.extent.width
-	viewport.height = cast(f32) vkx.swap_chain.extent.height
+	viewport.width = cast(f32) swap_chain.extent.width
+	viewport.height = cast(f32) swap_chain.extent.height
 	vk.CmdSetViewport(command_buffer, 0, 1, &viewport)
 
-	scissor.extent = vkx.swap_chain.extent
+	scissor.extent = swap_chain.extent
 	vk.CmdSetScissor(command_buffer, 0, 1, &scissor)
 
 	rendering_info.pDepthAttachment = nil
-	color_attachment_info.imageView = vkx.swap_chain.image_views[image_index]
-	rendering_info.renderArea.extent = vkx.swap_chain.extent
+	color_attachment_info.imageView = swap_chain.image_views[image_index]
+	rendering_info.renderArea.extent = swap_chain.extent
 	
 	// NOTE: an improvement we could make here would be to add a projection
 	// matrix and feed it into the screen pipeline to ensure a consistent
@@ -1019,8 +1032,8 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	// Memory barrier to transition the swap chain image from color attachment to present
 	vkx.transition_image_layout(
 		command_buffer,
-		vkx.swap_chain.images[image_index],
-		vkx.swap_chain.image_format,
+		swap_chain.images[image_index],
+		swap_chain.image_format,
 		.COLOR_ATTACHMENT_OPTIMAL,
 		.PRESENT_SRC_KHR,
 	)
@@ -1032,21 +1045,26 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 }
 
 draw_frame :: proc() {
-	vk.WaitForFences(vkx.instance.device, 1, &vkx.sync_objects.in_flight_fences[current_frame], true, c.UINT64_MAX)
+	sync_objects := &vkx.instance.sync_objects
+	swap_chain := &vkx.instance.swap_chain
+
+	fmt.println("Current frame: ", current_frame)
+	vk.WaitForFences(vkx.instance.device, 1, &sync_objects.in_flight_fences[current_frame], true, c.UINT64_MAX)
 
 	image_index: u32
 	result := vk.AcquireNextImageKHR(
 		device=vkx.instance.device,
-		swapchain=vkx.swap_chain.swap_chain,
+		swapchain=swap_chain.swap_chain,
 		timeout=c.UINT64_MAX,
-		semaphore=vkx.sync_objects.image_available_semaphores[current_frame],
+		semaphore=sync_objects.image_available_semaphores[current_frame],
 		fence={},
 		pImageIndex=&image_index,
 	)
 
 	if result == .ERROR_OUT_OF_DATE_KHR {
 		fmt.printf("Couldn't acquire swap chain image - recreating swap chain\n")
-		vkx.recreate_swap_chain()
+		vkx.recreate_swap_chain(swap_chain)
+		
 		return
 
 	} else if result != .SUCCESS && result != .SUBOPTIMAL_KHR {
@@ -1113,15 +1131,15 @@ draw_frame :: proc() {
 	fmt.print("\n")
 	*/
 
-	vk.ResetFences(vkx.instance.device, 1, &vkx.sync_objects.in_flight_fences[current_frame])
+	vk.ResetFences(vkx.instance.device, 1, &sync_objects.in_flight_fences[current_frame])
 
 	vk.ResetCommandBuffer(vkx.instance.command_buffers[current_frame], {})
 	
 	// Write our draw commands into the command buffer
 	record_command_buffer(vkx.instance.command_buffers[current_frame], image_index)
 
-	wait_semaphore := &vkx.sync_objects.image_available_semaphores[current_frame]
-	signal_semaphore := &vkx.sync_objects.render_finished_semaphores[current_frame]
+	wait_semaphore := &sync_objects.image_available_semaphores[current_frame]
+	signal_semaphore := &sync_objects.render_finished_semaphores[current_frame]
 	wait_stages: vk.PipelineStageFlags = {.COLOR_ATTACHMENT_OUTPUT}
 
 	submit_info := vk.SubmitInfo {
@@ -1135,7 +1153,7 @@ draw_frame :: proc() {
 		pSignalSemaphores = signal_semaphore,
 	}
 	
-	if vk.QueueSubmit(vkx.instance.graphics_queue, 1, &submit_info, vkx.sync_objects.in_flight_fences[current_frame]) != .SUCCESS {
+	if vk.QueueSubmit(vkx.instance.graphics_queue, 1, &submit_info, sync_objects.in_flight_fences[current_frame]) != .SUCCESS {
 		fmt.eprintfln("failed to submit draw command buffer!")
 		os.exit(1)
 	}
@@ -1145,7 +1163,7 @@ draw_frame :: proc() {
 		waitSemaphoreCount= 1,
 		pWaitSemaphores = signal_semaphore,
 		swapchainCount = 1,
-		pSwapchains = &vkx.swap_chain.swap_chain,
+		pSwapchains = &swap_chain.swap_chain,
 		pImageIndices = &image_index,
 	
 	}
@@ -1164,20 +1182,20 @@ draw_frame :: proc() {
 	if framebuffer_resized {
 		fmt.print("Framebuffer resized - recreating swap chain\n")
 		framebuffer_resized = false
-		vkx.recreate_swap_chain()
+		vkx.recreate_swap_chain(swap_chain)
 	} else if suboptimal_swapchain_count >= SUBOPTIMAL_SWAPCHAIN_THRESHOLD {
 		suboptimal_swapchain_count = 0
 		fmt.print("Swapchain is still suboptimal - recreating\n")
-		vkx.recreate_swap_chain()
+		vkx.recreate_swap_chain(swap_chain)
 	} else if result == .ERROR_OUT_OF_DATE_KHR {
 		fmt.printf("Couldn't present swap chain image - recreating swap chain (result: %d)\n", result)
-		vkx.recreate_swap_chain()
+		vkx.recreate_swap_chain(swap_chain)
 	} else if result != .SUBOPTIMAL_KHR && result != .SUCCESS {
 		fmt.eprintf("failed to present swap chain image! (result: %d)\n", result)
 		os.exit(1)
 	}
 
-	current_frame = (current_frame + 1) % vkx.FRAMES_IN_FLIGHT
+	current_frame = (current_frame + 1) % vkx.instance.frames_in_flight
 }
 
 main :: proc() {

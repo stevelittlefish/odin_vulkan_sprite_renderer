@@ -380,20 +380,29 @@ init_instance :: proc(window: ^sdl.Window) {
 		os.exit(1)
 	}
 
+	// ----- Create the swap chain -----
+	create_swap_chain(&instance.swap_chain)
+
+	// Set frames in flight to be the number of swap chain images
+	instance.frames_in_flight = cast(u32) len(instance.swap_chain.images)
+
 	// ----- Create the command buffers -----
-	instance.command_buffers = make([]vk.CommandBuffer, FRAMES_IN_FLIGHT)
+	instance.command_buffers = make([]vk.CommandBuffer, instance.frames_in_flight)
 
 	buf_alloc_info := vk.CommandBufferAllocateInfo {
 		sType = vk.StructureType.COMMAND_BUFFER_ALLOCATE_INFO,
 		commandPool = instance.command_pool,
 		level = vk.CommandBufferLevel.PRIMARY,
-		commandBufferCount = FRAMES_IN_FLIGHT,
+		commandBufferCount = instance.frames_in_flight,
 	}
 
 	if vk.AllocateCommandBuffers(instance.device, &buf_alloc_info, &instance.command_buffers[0]) != .SUCCESS {
 		fmt.fprintln(os.stderr, "failed to allocate command buffers!")
 		os.exit(1)
 	}
+
+	// ----- Create the semaphores and fence -----
+	init_sync_objects(&instance.sync_objects, instance.frames_in_flight)
 }
 
 cleanup_instance :: proc() {

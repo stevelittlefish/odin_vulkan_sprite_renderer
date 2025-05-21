@@ -35,7 +35,7 @@ choose_swap_extent :: proc(window: ^sdl.Window, capabilities: ^vk.SurfaceCapabil
 	}
 }
 
-create_swap_chain :: proc() {
+create_swap_chain :: proc(swap_chain: ^SwapChain) {
 	swap_chain_support := query_swap_chain_support(instance.physical_device, instance.surface)
 
 	if len(swap_chain_support.formats) == 0 {
@@ -121,7 +121,8 @@ create_swap_chain :: proc() {
 		sType = vk.StructureType.COMMAND_BUFFER_BEGIN_INFO,
 	}
 
-	command_buffer := instance.command_buffers[0]
+	// command_buffer := instance.command_buffers[0]
+	command_buffer := begin_single_time_commands()
 
     if vk.ResetCommandBuffer(command_buffer, {}) != .SUCCESS {
         fmt.fprintln(os.stderr, "failed to reset command buffer!")
@@ -170,6 +171,8 @@ create_swap_chain :: proc() {
         )
     }
 
+	/*
+	// TODO: is this right?
     if vk.EndCommandBuffer(command_buffer) != .SUCCESS {
         fmt.fprintln(os.stderr, "failed to record command buffer!")
         os.exit(1)
@@ -187,6 +190,9 @@ create_swap_chain :: proc() {
 		fmt.fprintln(os.stderr, "failed to submit command buffer!")
 		os.exit(1)
 	}
+	*/
+
+	end_single_time_commands(command_buffer)
 	
 	// ----- Now create the image views -----
 	swap_chain.image_views = make([]vk.ImageView, len(swap_chain.images))
@@ -206,10 +212,10 @@ create_swap_chain :: proc() {
 
 	cleanup_swap_chain_support(&swap_chain_support)
 
-	fmt.printfln(" Swap chain created with format: %d", swap_chain.image_format)
+	fmt.printfln(" Swap chain created with format: %d (%d images)", swap_chain.image_format, num_swap_chain_images)
 }
 
-cleanup_swap_chain :: proc() {
+cleanup_swap_chain :: proc(swap_chain: ^SwapChain) {
 	fmt.printf("Cleaning up swap chain\n")
 	
 	for i := 0; i < len(swap_chain.images); i += 1 {
@@ -223,7 +229,7 @@ cleanup_swap_chain :: proc() {
 	vk.DestroySwapchainKHR(instance.device, swap_chain.swap_chain, nil)
 }
 
-recreate_swap_chain :: proc() {
+recreate_swap_chain :: proc(swap_chain: ^SwapChain) {
 	// TODO: fix the memory leak!
 	fmt.println("WARNING: memory leak in vkx.recreate_swap_chain")
 
@@ -232,7 +238,7 @@ recreate_swap_chain :: proc() {
 
 	vk.DeviceWaitIdle(instance.device)
 
-	cleanup_swap_chain()
+	cleanup_swap_chain(swap_chain)
 
-	create_swap_chain()
+	create_swap_chain(swap_chain)
 }

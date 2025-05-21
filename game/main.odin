@@ -1045,17 +1045,17 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 }
 
 draw_frame :: proc() {
-	sync_objects := &vkx.instance.sync_objects
+	frame_sync_objects := &vkx.instance.frame_sync_objects[current_frame]
 	swap_chain := &vkx.instance.swap_chain
 
-	vk.WaitForFences(vkx.instance.device, 1, &sync_objects.in_flight_fences[current_frame], true, c.UINT64_MAX)
+	vk.WaitForFences(vkx.instance.device, 1, &frame_sync_objects.in_flight_fence, true, c.UINT64_MAX)
 
 	image_index: u32
 	result := vk.AcquireNextImageKHR(
 		device=vkx.instance.device,
 		swapchain=swap_chain.swap_chain,
 		timeout=c.UINT64_MAX,
-		semaphore=sync_objects.image_available_semaphores[current_frame],
+		semaphore=frame_sync_objects.image_available_semaphore,
 		fence={},
 		pImageIndex=&image_index,
 	)
@@ -1132,29 +1132,29 @@ draw_frame :: proc() {
 	fmt.print("\n")
 	*/
 
-	vk.ResetFences(vkx.instance.device, 1, &sync_objects.in_flight_fences[current_frame])
+	vk.ResetFences(vkx.instance.device, 1, &frame_sync_objects.in_flight_fence)
 
 	vk.ResetCommandBuffer(vkx.instance.command_buffers[current_frame], {})
 	
 	// Write our draw commands into the command buffer
 	record_command_buffer(vkx.instance.command_buffers[current_frame], image_index)
-
-	wait_semaphore := &sync_objects.image_available_semaphores[current_frame]
-	signal_semaphore := &sync_objects.render_finished_semaphores[image_index]
+	
+	image_available_semaphore := &frame_sync_objects.image_available_semaphore
+	render_finished_semaphore := &swap_chain.render_finished_semaphores[image_index]
 	wait_stages: vk.PipelineStageFlags = {.COLOR_ATTACHMENT_OUTPUT}
 
 	submit_info := vk.SubmitInfo {
 		sType = .SUBMIT_INFO,
 		waitSemaphoreCount = 1,
-		pWaitSemaphores = wait_semaphore,
+		pWaitSemaphores = image_available_semaphore,
 		pWaitDstStageMask = &wait_stages,
 		commandBufferCount = 1,
 		pCommandBuffers = &vkx.instance.command_buffers[current_frame],
 		signalSemaphoreCount = 1,
-		pSignalSemaphores = signal_semaphore,
+		pSignalSemaphores = render_finished_semaphore,
 	}
 	
-	if vk.QueueSubmit(vkx.instance.graphics_queue, 1, &submit_info, sync_objects.in_flight_fences[current_frame]) != .SUCCESS {
+	if vk.QueueSubmit(vkx.instance.graphics_queue, 1, &submit_info, frame_sync_objects.in_flight_fence) != .SUCCESS {
 		fmt.eprintfln("failed to submit draw command buffer!")
 		os.exit(1)
 	}
@@ -1162,7 +1162,7 @@ draw_frame :: proc() {
 	present_info := vk.PresentInfoKHR {
 		sType = .PRESENT_INFO_KHR,
 		waitSemaphoreCount= 1,
-		pWaitSemaphores = signal_semaphore,
+		pWaitSemaphores = render_finished_semaphore,
 		swapchainCount = 1,
 		pSwapchains = &swap_chain.swap_chain,
 		pImageIndices = &image_index,

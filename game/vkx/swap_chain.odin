@@ -117,6 +117,19 @@ create_swap_chain :: proc(swap_chain: ^SwapChain) {
 	vk.GetSwapchainImagesKHR(instance.device, swap_chain.swap_chain, &num_swap_chain_images, nil)
 	swap_chain.images = make([]vk.Image, num_swap_chain_images)
 	vk.GetSwapchainImagesKHR(instance.device, swap_chain.swap_chain, &num_swap_chain_images, raw_data(swap_chain.images))
+	
+	// Create a semaphore for each swap chain image
+	semaphore_info := vk.SemaphoreCreateInfo {
+		sType = .SEMAPHORE_CREATE_INFO,
+	}
+
+	swap_chain.render_finished_semaphores = make([]vk.Semaphore, num_swap_chain_images)
+	for i: u32 = 0; i < num_swap_chain_images; i += 1 {
+		if vk.CreateSemaphore(instance.device, &semaphore_info, nil, &swap_chain.render_finished_semaphores[i]) != .SUCCESS {
+			fmt.eprint("failed to create render finished semaphore for a swap chain image!\n")
+			os.exit(1)
+		}
+	}
 
 	// Transition the images to a valid layout
 	command_buffer := begin_single_time_commands()
@@ -186,12 +199,18 @@ cleanup_swap_chain :: proc(swap_chain: ^SwapChain) {
 	
 	for i := 0; i < len(swap_chain.images); i += 1 {
 		vk.DestroyImageView(instance.device, swap_chain.image_views[i], nil)
+		vk.DestroySemaphore(instance.device, swap_chain.render_finished_semaphores[i], nil)
 	}
 	
-	// TODO: is this free needed?
+	delete(swap_chain.images)
+	swap_chain.images = nil
+
 	delete(swap_chain.image_views)
 	swap_chain.image_views = nil
 
+	delete(swap_chain.render_finished_semaphores)
+	swap_chain.render_finished_semaphores = nil
+	
 	vk.DestroySwapchainKHR(instance.device, swap_chain.swap_chain, nil)
 }
 

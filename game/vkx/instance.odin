@@ -384,7 +384,8 @@ init_instance :: proc(window: ^sdl.Window) {
 	create_swap_chain(&instance.swap_chain)
 
 	// Set frames in flight to be the number of swap chain images
-	instance.frames_in_flight = cast(u32) len(instance.swap_chain.images)
+	// instance.frames_in_flight = cast(u32) len(instance.swap_chain.images)
+	instance.frames_in_flight = 2
 	fmt.printfln("NUM FRAMES IN FLIGHT: %d", instance.frames_in_flight)
 
 	// ----- Create the command buffers -----
@@ -403,7 +404,28 @@ init_instance :: proc(window: ^sdl.Window) {
 	}
 
 	// ----- Create the semaphores and fence -----
-	init_sync_objects(&instance.sync_objects, instance.frames_in_flight)
+
+	semaphore_info := vk.SemaphoreCreateInfo {
+		sType = .SEMAPHORE_CREATE_INFO,
+	}
+
+	fence_info := vk.FenceCreateInfo {
+		sType = .FENCE_CREATE_INFO,
+		flags = {.SIGNALED},
+	}
+
+	instance.frame_sync_objects = make([]FrameSyncObjects, instance.frames_in_flight)
+	for &sync_objects in instance.frame_sync_objects {
+		if vk.CreateSemaphore(instance.device, &semaphore_info, nil, &sync_objects.image_available_semaphore) != .SUCCESS {
+			fmt.eprint("failed to create semaphores for a frame!\n")
+			os.exit(1)
+		}
+
+		if vk.CreateFence(instance.device, &fence_info, nil, &sync_objects.in_flight_fence) != .SUCCESS {
+			fmt.eprint("failed to create synchronization objects for a frame!\n")
+			os.exit(1)
+		}
+	}
 }
 
 cleanup_instance :: proc() {
@@ -421,6 +443,11 @@ cleanup_instance :: proc() {
 		}
 	}
 	*/
+
+	for &sync_objects in instance.frame_sync_objects {
+		vk.DestroySemaphore(instance.device, sync_objects.image_available_semaphore, nil)
+		vk.DestroyFence(instance.device, sync_objects.in_flight_fence, nil)
+	}
 
 	vk.DestroySurfaceKHR(instance.instance, instance.surface, nil)
 

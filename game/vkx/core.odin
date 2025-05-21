@@ -34,8 +34,8 @@ VkxInstance :: struct {
 	command_pool: vk.CommandPool,
 	// Command buffers for each frame in flight
 	command_buffers: []vk.CommandBuffer,
-	// Semaphores and fence
-	sync_objects: SyncObjects,
+	// Semaphores and fence for each frame
+	frame_sync_objects: []FrameSyncObjects,
 }
 
 SwapChain :: struct {
@@ -49,6 +49,8 @@ SwapChain :: struct {
 	image_format: vk.Format,
 	// Size of the swap chain images
 	extent: vk.Extent2D,
+	// Semaphore for each swapchain image
+	render_finished_semaphores: []vk.Semaphore,
 }
 
 QueueFamilyIndices :: struct {
@@ -83,10 +85,9 @@ Image :: struct {
 	view: vk.ImageView,
 }
 
-SyncObjects :: struct {
-	image_available_semaphores: []vk.Semaphore,
-	render_finished_semaphores: []vk.Semaphore,
-	in_flight_fences: []vk.Fence,
+FrameSyncObjects :: struct {
+	image_available_semaphore: vk.Semaphore,
+	in_flight_fence: vk.Fence,
 } 
 
 

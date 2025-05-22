@@ -1,0 +1,53 @@
+commit ff203462fda43cc1e18994b9e08262b9504a758f
+Author: Dan Korostelev <nadako@gmail.com>
+Date:   Sun May 4 23:58:34 2025 +0200
+
+    fix vulkan bindings for the new version
+
+commit d2a133f9f2cfca7d6392edd40a873727671dc57f
+Author: Dan Korostelev <nadako@gmail.com>
+Date:   Wed Apr 30 00:16:21 2025 +0200
+
+    also enable GLFW backend
+
+commit 76d4dedcf40b79a3388a8d5a4ac1dcc5f32fcf97
+Author: Dan Korostelev <nadako@gmail.com>
+Date:   Wed Apr 30 00:13:52 2025 +0200
+
+    also enable Vulkan backend
+
+commit 7372452b54f90f3caba222ceaee24f7f9faf720c
+Author: Dan Korostelev <nadako@gmail.com>
+Date:   Wed Apr 2 14:59:36 2025 +0200
+
+    Add a helper function to create TextureID from SDLGPU3 texture/sampler binding
+
+commit 17d067f51f414393ad96cbcbd51542e73372fc66
+Author: Dan Korostelev <nadako@gmail.com>
+Date:   Sun Mar 30 23:14:15 2025 +0200
+
+    Basic SDLGPU3 support & Update to 1.91.9b
+
+commit 523f06a5de2ab482c463ed5376f2a4d3c41b48ac
+Author: L4 <lfourunderscore@gmail.com>
+Date:   Sun Feb 9 16:42:08 2025 +0100
+
+    Fix imgui_internal.h compile
+
+commit 0c6f223901f7e9c4a093a997e647522bbaebc78c
+Author: L4 <lfourunderscore@gmail.com>
+Date:   Sun Feb 9 16:28:39 2025 +0100
+
+    Generate bindings for imgui_internal.h
+
+commit b7c201ce73f7e5878c21c39d2b8b2247dacac821
+Author: L4 <lfourunderscore@gmail.com>
+Date:   Sun Feb 9 15:42:21 2025 +0100
+
+    First pass toward building imconfig.h and imgui_internal.h
+
+commit 1ee4c39107a01ca55d3c5129c8242335ccbeb11f
+Author: L4 <lfourunderscore@gmail.com>
+Date:   Sun Feb 9 11:42:08 2025 +0100
+
+    Correct README

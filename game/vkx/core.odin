@@ -24,8 +24,12 @@ VkxInstance :: struct {
 	device: vk.Device,
 	// Graphics queue
 	graphics_queue: vk.Queue,
+	// Graphics queue family index
+	graphics_family: u32,
 	// Presentation queue
 	present_queue: vk.Queue,
+	// Present queue family index
+	present_family: u32,
 	// Number of frames in flight
 	frames_in_flight: u32,
 	// Swap chain related data

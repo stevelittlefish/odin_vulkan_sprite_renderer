@@ -365,8 +365,11 @@ init_instance :: proc(window: ^sdl.Window) {
 		fmt.fprintln(os.stderr, "failed to create logical device!")
 		os.exit(1)
 	}
-
+	
+	instance.graphics_family = physical_indices.graphics_family
 	vk.GetDeviceQueue(instance.device, physical_indices.graphics_family, 0, &instance.graphics_queue)
+
+	instance.present_family = physical_indices.present_family
 	vk.GetDeviceQueue(instance.device, physical_indices.present_family, 0, &instance.present_queue)
 
 	// ----- Create the command pool -----

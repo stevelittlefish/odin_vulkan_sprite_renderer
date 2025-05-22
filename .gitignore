@@ -1,3 +1,6 @@
 vulkan_renderer
 *.exe
 *.spv
+# TODO: remove this
+imgui
+imgui.ini

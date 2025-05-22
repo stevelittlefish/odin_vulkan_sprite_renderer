@@ -16,6 +16,9 @@ import sdl "vendor:sdl3"
 import vk "vendor:vulkan"
 
 import "vkx"
+import "../imgui"
+import "../imgui/imgui_impl_sdl3"
+import "../imgui/imgui_impl_vulkan"
 
 // Struct for vertex based geometry (i.e. the tiles)
 Vertex :: struct {
@@ -180,6 +183,9 @@ framebuffer_resized := false
 
 // Are we running in fullscreen mode?
 fullscreen := false
+
+// Display the GUI?
+show_gui := true
 
 get_binding_description :: proc() -> vk.VertexInputBindingDescription {
 	binding_description := vk.VertexInputBindingDescription{
@@ -770,6 +776,12 @@ init_vulkan :: proc() {
 	fmt.println("Initiialisation complete")
 }
 
+cleanup_gui :: proc() {
+	imgui_impl_vulkan.Shutdown()
+	imgui_impl_sdl3.Shutdown()
+	imgui.DestroyContext()
+}
+
 cleanup_vulkan :: proc() {
 	fmt.println("Cleaning up Vulkan")
 
@@ -1020,6 +1032,22 @@ record_command_buffer :: proc(command_buffer: vk.CommandBuffer, image_index: u32
 	vk.CmdBindPipeline(command_buffer, .GRAPHICS, screen_pipeline.pipeline)
 	vk.CmdBindDescriptorSets(command_buffer, .GRAPHICS, screen_pipeline.layout, 0, 1, &screen_descriptor_sets[current_frame], 0, nil)
 	vk.CmdDraw(command_buffer, 6, 1, 0, 0)
+	
+	// Render the GUI /////////////////////////////////////////////////////////
+	imgui_impl_vulkan.NewFrame()
+	imgui_impl_sdl3.NewFrame()
+	imgui.NewFrame()
+
+	if (show_gui) {
+		imgui.Begin("Tools (F10)", nil, {.NoCollapse, .NoResize})
+		imgui.Text("Hello World")
+		imgui.End()
+	}
+
+	imgui.Render()
+	draw_data := imgui.GetDrawData()
+	imgui_impl_vulkan.RenderDrawData(draw_data, command_buffer)
+	// /Render the GUI ////////////////////////////////////////////////////////
 
 	// --- End dynamic rendering ----------------------------------------------
 	vk.CmdEndRendering(command_buffer)
@@ -1192,6 +1220,28 @@ draw_frame :: proc() {
 	current_frame = (current_frame + 1) % vkx.instance.frames_in_flight
 }
 
+// TODO: move this somewhere more sensible
+// This function is used by the imgui vulkan backend
+check_vk_result :: proc "system" (err: vk.Result) {
+	context = runtime.default_context()
+
+	if err == .SUCCESS {
+		return
+	}
+
+	fmt.eprintfln("[vulkan] Error: VkResult = %v", err)
+
+	if (int(err) < 0) {
+		os.exit(1)
+	}
+}
+
+// TODO: move this too
+// [](const char* function_name, void*) { return vkGetInstanceProcAddr(your_vk_isntance, function_name); })
+vk_load_fun :: proc "system" (p_name: cstring, wtf: rawptr) -> vk.ProcVoidFunction {
+	return vk.GetInstanceProcAddr(vkx.instance.instance, p_name)
+}
+
 main :: proc() {
 	fmt.println("Hello, Vulkan!")
 	fmt.print("\n")
@@ -1242,6 +1292,50 @@ main :: proc() {
 	// Initialise Vulkan
 	init_vulkan()
 
+	// Initialise IMGUI ///////////////////////////////////////////////////////////////////////////////
+	fmt.println("Initialising IMGUI")
+	imgui.CHECKVERSION()
+	imgui.CreateContext()
+	// defer imgui.DestroyContext()
+	imgui_io := imgui.GetIO()
+	imgui_io.ConfigFlags += {.NavEnableKeyboard, .NavEnableGamepad}
+	imgui.StyleColorsDark()
+
+	if !imgui_impl_sdl3.InitForVulkan(window) {
+		fmt.eprintfln("Couldn't initialise IMGUI/SDL3")
+		os.exit(1)
+	}
+	// defer imgui_impl_sdl3.Shutdown()
+
+	pipeline_rendering_create_info := vk.PipelineRenderingCreateInfo{
+		sType = .PIPELINE_RENDERING_CREATE_INFO,
+		colorAttachmentCount = 1,
+		pColorAttachmentFormats = &vkx.instance.swap_chain.image_format,
+	}
+
+	imgui_vulkan_init_info := imgui_impl_vulkan.InitInfo{
+		ApiVersion = vk.API_VERSION_1_3,
+		Instance = vkx.instance.instance,
+		PhysicalDevice = vkx.instance.physical_device,
+		Device = vkx.instance.device,
+		QueueFamily = vkx.instance.graphics_family,
+		Queue = vkx.instance.graphics_queue,
+		// TODO: is this min image count correct?
+		MinImageCount = 2,
+		ImageCount = cast(u32) len(vkx.instance.swap_chain.images),
+		MSAASamples = ._1,
+		// TODO: I have no idea if this is right!
+		DescriptorPoolSize = 10,
+		UseDynamicRendering = true,
+		PipelineRenderingCreateInfo = pipeline_rendering_create_info,
+		CheckVkResultFn = check_vk_result,
+		MinAllocationSize = 1024 * 1024,
+	}
+	imgui_impl_vulkan.LoadFunctions(vk.API_VERSION_1_3, vk_load_fun)
+	//ImGui_ImplVulkan_LoadFunctions(VK_API_VERSION_1_3, [](const char* function_name, void*) { return vkGetInstanceProcAddr(your_vk_isntance, function_name); });
+	imgui_impl_vulkan.Init(&imgui_vulkan_init_info)
+	// /Initialise IMGUI //////////////////////////////////////////////////////////////////////////////
+
 	// Make the window visible
 	sdl.ShowWindow(window)
 
@@ -1264,6 +1358,8 @@ main :: proc() {
     for running {
         // Poll for events
         for sdl.PollEvent(&event) == true {
+			imgui_impl_sdl3.ProcessEvent(&event)
+
             if event.type == sdl.EventType.QUIT {
                 running = false
             } else if event.type == sdl.EventType.KEY_DOWN {
@@ -1313,6 +1409,8 @@ main :: proc() {
 
 	vk.DeviceWaitIdle(vkx.instance.device)
 	
+	cleanup_gui()
+
 	cleanup_vulkan()
 
 	// Cleanup SDL

@@ -41,6 +41,3 @@ I've included a shell script and batch file to compile the shaders on
 Linux and Windows respectively, as well as a run script to run the app
 with the validation layers enabled.
 
-## Screenshot
-
-![Screenshot](https://raw.githubusercontent.com/stevelittlefish/odin_vulkan_sprite_renderer/refs/heads/main/screenshot.png)

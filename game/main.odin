@@ -1222,7 +1222,7 @@ draw_frame :: proc() {
 
 // TODO: move this somewhere more sensible
 // This function is used by the imgui vulkan backend
-check_vk_result :: proc "system" (err: vk.Result) {
+check_vk_result :: proc "c" (err: vk.Result) {
 	context = runtime.default_context()
 
 	if err == .SUCCESS {
@@ -1238,7 +1238,7 @@ check_vk_result :: proc "system" (err: vk.Result) {
 
 // TODO: move this too
 // [](const char* function_name, void*) { return vkGetInstanceProcAddr(your_vk_isntance, function_name); })
-vk_load_fun :: proc "system" (p_name: cstring, wtf: rawptr) -> vk.ProcVoidFunction {
+vk_load_fun :: proc "c" (p_name: cstring, wtf: rawptr) -> vk.ProcVoidFunction {
 	return vk.GetInstanceProcAddr(vkx.instance.instance, p_name)
 }
 

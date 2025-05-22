@@ -41,6 +41,10 @@ I've included a shell script and batch file to compile the shaders on
 Linux and Windows respectively, as well as a run script to run the app
 with the validation layers enabled.
 
+## Dear IMGUI
+
+To see a dear imgui integration, check out the `imgui` branch: [imgui](https://github.com/stevelittlefish/odin_vulkan_sprite_renderer/tree/dear_imgui)
+
 ## Screenshot
 
 ![Screenshot](https://raw.githubusercontent.com/stevelittlefish/odin_vulkan_sprite_renderer/refs/heads/main/screenshot.png)
